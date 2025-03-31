@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zephyr.croj.mapper.UserMapper">
+
+    <!-- 通用查询映射结果 -->
+    <resultMap id="BaseResultMap" type="com.zephyr.croj.model.entity.User">
+        <id column="id" property="id" />
+        <result column="username" property="username" />
+        <result column="password" property="password" />
+        <result column="email" property="email" />
+        <result column="avatar" property="avatar" />
+        <result column="role" property="role" />
+        <result column="status" property="status" />
+        <result column="bio" property="bio" />
+        <result column="github" property="github" />
+        <result column="school" property="school" />
+        <result column="create_time" property="createTime" />
+        <result column="update_time" property="updateTime" />
+        <result column="last_login_time" property="lastLoginTime" />
+        <result column="last_login_ip" property="lastLoginIp" />
+        <result column="is_deleted" property="isDeleted" />
+    </resultMap>
+
+    <!-- 根据用户名或邮箱查询用户 -->
+    <select id="findByUsernameOrEmail" resultMap="BaseResultMap">
+        SELECT * FROM t_user
+        WHERE (username = #{account} OR email = #{account})
+          AND is_deleted = 0
+            LIMIT 1
+    </select>
+
+    <!-- 检查用户名是否存在 -->
+    <select id="existsByUsername" resultType="boolean">
+        SELECT COUNT(1) > 0
+        FROM t_user
+        WHERE username = #{username}
+          AND is_deleted = 0
+    </select>
+
+    <!-- 检查邮箱是否存在 -->
+    <select id="existsByEmail" resultType="boolean">
+        SELECT COUNT(1) > 0
+        FROM t_user
+        WHERE email = #{email}
+          AND is_deleted = 0
+    </select>
+
+</mapper>

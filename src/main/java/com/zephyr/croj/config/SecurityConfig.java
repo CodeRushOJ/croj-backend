@@ -1,21 +1,35 @@
 package com.zephyr.croj.config;
 
+import com.zephyr.croj.security.JwtAccessDeniedHandler;
+import com.zephyr.croj.security.JwtAuthenticationEntryPoint;
+import com.zephyr.croj.security.JwtAuthenticationFilter;
+import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
+import org.springframework.security.config.annotation.method.configuration.EnableGlobalMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
-import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 /**
  * Spring Security 配置类
  */
 @Configuration
 @EnableWebSecurity
+@EnableGlobalMethodSecurity(prePostEnabled = true)
+@RequiredArgsConstructor
 public class SecurityConfig {
+
+    private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
+    private final JwtAccessDeniedHandler jwtAccessDeniedHandler;
 
     /**
      * 密码编码器
@@ -26,16 +40,65 @@ public class SecurityConfig {
         return new BCryptPasswordEncoder();
     }
 
+    /**
+     * 认证管理器
+     */
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    public AuthenticationManager authenticationManager(AuthenticationConfiguration authenticationConfiguration)
+            throws Exception {
+        return authenticationConfiguration.getAuthenticationManager();
+    }
+
+    /**
+     * 安全过滤器链配置
+     */
+    @Bean
+    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
-                .authorizeHttpRequests(authorize -> authorize
-                        .antMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**",
-                                "/swagger-resources/**", "/webjars/**").permitAll()
-                        .antMatchers("/user/register", "/user/login").permitAll()
-                        .anyRequest().authenticated()
-                )
-                .csrf(AbstractHttpConfigurer::disable);
+                // 禁用CSRF，因为我们使用JWT，不需要CSRF保护
+                .csrf().disable()
+                // 异常处理
+                .exceptionHandling()
+                .authenticationEntryPoint(jwtAuthenticationEntryPoint)
+                .accessDeniedHandler(jwtAccessDeniedHandler)
+                .and()
+                // 使用无状态会话，不需要session
+                .sessionManagement()
+                .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+                .and()
+                // 请求授权规则
+                .authorizeRequests()
+                // 允许所有人访问公共资源
+                .antMatchers(
+                        "/swagger-ui.html",
+                        "/swagger-ui/**",
+                        "/swagger-ui/index.html",
+                        "/swagger-ui/swagger-ui.css",
+                        "/swagger-ui/swagger-ui-bundle.js",
+                        "/swagger-ui/swagger-ui-standalone-preset.js",
+                        "/v3/api-docs/**",
+                        "/v3/api-docs.yaml",
+                        "/swagger-resources/**",
+                        "/webjars/**"
+                ).permitAll()
+                // 允许所有人访问登录和注册接口
+                .antMatchers(
+                        "/user/register",
+                        "/user/login",
+                        "/user/check/username/**",
+                        "/user/check/email/**"
+                ).permitAll()
+                // OPTIONS 请求放行
+                .antMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                // 管理员接口权限
+                .antMatchers("/user/list").hasAnyRole("ADMIN", "SUPER_ADMIN")
+                .antMatchers("/user/status/**").hasAnyRole("ADMIN", "SUPER_ADMIN")
+                .antMatchers(HttpMethod.DELETE, "/user/**").hasAnyRole("ADMIN", "SUPER_ADMIN")
+                // 其他所有请求需要认证
+                .anyRequest().authenticated();
+
+        // 添加JWT过滤器
+        http.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }

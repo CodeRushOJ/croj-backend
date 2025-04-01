@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.zephyr.croj.common.enums.UserRoleEnum;
 import com.zephyr.croj.common.exception.BusinessException;
 import com.zephyr.croj.mapper.UserMapper;
 import com.zephyr.croj.model.dto.UserLoginDTO;
@@ -11,9 +12,15 @@ import com.zephyr.croj.model.dto.UserRegisterDTO;
 import com.zephyr.croj.model.dto.UserUpdateDTO;
 import com.zephyr.croj.model.entity.User;
 import com.zephyr.croj.model.vo.UserVO;
+import com.zephyr.croj.security.JwtTokenProvider;
 import com.zephyr.croj.service.UserService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,6 +28,7 @@ import org.springframework.util.StringUtils;
 
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
@@ -37,6 +45,12 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
 
     @Resource
     private PasswordEncoder passwordEncoder;
+
+    @Resource
+    private AuthenticationManager authenticationManager;
+
+    @Resource
+    private JwtTokenProvider jwtTokenProvider;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -76,40 +90,47 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
 
     @Override
     public String login(UserLoginDTO loginDTO, String ip) {
-        // 根据用户名或邮箱查询用户
-        User user = baseMapper.findByUsernameOrEmail(loginDTO.getAccount());
-        if (user == null) {
+        try {
+            // 使用Spring Security的AuthenticationManager进行身份验证
+            Authentication authentication = authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(loginDTO.getAccount(), loginDTO.getPassword())
+            );
+
+            // 认证成功，设置Authentication到SecurityContext
+            SecurityContextHolder.getContext().setAuthentication(authentication);
+
+            // 根据用户名查询用户获取ID和角色信息
+            User user = baseMapper.findByUsernameOrEmail(loginDTO.getAccount());
+
+            // 更新最后登录时间和IP
+            baseMapper.updateLastLogin(user.getId(), ip);
+
+            // 生成JWT令牌
+            List<String> roles = Collections.singletonList(UserRoleEnum.getByCode(user.getRole()).getDesc());
+            return jwtTokenProvider.createToken(user.getId(), user.getUsername(), roles);
+
+        } catch (AuthenticationException e) {
+            log.error("认证失败: {}", e.getMessage());
             throw new BusinessException(400, "用户名或密码错误");
         }
-
-        // 验证密码 - 使用 Spring Security 的密码匹配
-        if (!passwordEncoder.matches(loginDTO.getPassword(), user.getPassword())) {
-            throw new BusinessException(400, "用户名或密码错误");
-        }
-
-        // 验证用户状态
-        if (user.getStatus() == 1) {
-            throw new BusinessException(400, "账号已被禁用");
-        }
-
-        // 更新最后登录时间和IP
-        baseMapper.updateLastLogin(user.getId(), ip);
-
-        // 简化处理，返回用户ID作为临时令牌
-        // 实际项目应使用JWT或其他token机制
-        return String.valueOf(user.getId());
     }
 
     @Override
     public UserVO getCurrentUser() {
-        // 从请求中获取用户ID
-        // 这里简化处理，假设请求头中有user-id
-        String userId = request.getHeader("user-id");
-        if (!StringUtils.hasLength(userId)) {
+        // 从Spring Security的SecurityContext中获取当前认证用户
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated()) {
             throw new BusinessException(401, "未登录");
         }
 
-        return getUserById(Long.valueOf(userId));
+        // 从请求属性中获取用户ID（由JwtAuthenticationFilter设置）
+        Object userIdObj = request.getAttribute("userId");
+        if (userIdObj == null) {
+            throw new BusinessException(401, "无法获取用户信息");
+        }
+
+        Long userId = (Long) userIdObj;
+        return getUserById(userId);
     }
 
     @Override

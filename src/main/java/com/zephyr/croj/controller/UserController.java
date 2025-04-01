@@ -5,18 +5,21 @@ import com.zephyr.croj.common.response.Result;
 import com.zephyr.croj.model.dto.UserLoginDTO;
 import com.zephyr.croj.model.dto.UserRegisterDTO;
 import com.zephyr.croj.model.dto.UserUpdateDTO;
-import com.zephyr.croj.model.entity.User;
+import com.zephyr.croj.model.vo.LoginResponseVO;
 import com.zephyr.croj.model.vo.UserVO;
 import com.zephyr.croj.service.UserService;
 import com.zephyr.croj.utils.IpUtil;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
-import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
 import javax.validation.Valid;
 import javax.validation.constraints.NotBlank;
@@ -25,21 +28,23 @@ import java.util.Map;
 
 /**
  * 用户控制器
- *
- 
  */
 @RestController
 @RequestMapping("/user")
 @Tag(name = "用户管理", description = "用户相关接口")
 @Validated
 @Slf4j
+@RequiredArgsConstructor
 public class UserController {
 
-    @Resource
-    private UserService userService;
+    private final UserService userService;
+    private final HttpServletRequest request;
 
-    @Resource
-    private HttpServletRequest request;
+    @Value("${jwt.expiration}")
+    private long tokenExpiration;
+
+    @Value("${jwt.tokenPrefix}")
+    private String tokenPrefix;
 
     /**
      * 用户注册
@@ -56,27 +61,28 @@ public class UserController {
      */
     @PostMapping("/login")
     @Operation(summary = "用户登录")
-    public Result<Map<String, Object>> login(@RequestBody @Valid UserLoginDTO loginDTO) {
+    public Result<LoginResponseVO> login(@RequestBody @Valid UserLoginDTO loginDTO) {
         String ip = IpUtil.getIpAddr(request);
         String token = userService.login(loginDTO, ip);
 
         // 构建返回结果
-        Map<String, Object> resultMap = new HashMap<>(2);
-        resultMap.put("token", token);
+        LoginResponseVO loginResponse = LoginResponseVO.builder()
+                .token(token)
+                .tokenType(tokenPrefix)
+                .expiresIn(tokenExpiration) // 24小时，应与JWT配置保持一致
+                .build();
 
-        // 直接查询用户信息，而不是通过getCurrentUser方法
-        User user = userService.getById(token);
-        UserVO userVO = userService.convertToVO(user);
-        resultMap.put("userInfo", userVO);
-
-        return Result.success("登录成功", resultMap);
+        return Result.success("登录成功", loginResponse);
     }
 
     /**
      * 获取当前登录用户信息
      */
     @GetMapping("/info")
-    @Operation(summary = "获取当前登录用户信息")
+    @Operation(
+            summary = "获取当前登录用户信息",
+            security = @SecurityRequirement(name = "Bearer Authentication")
+    )
     public Result<UserVO> getCurrentUser() {
         UserVO userVO = userService.getCurrentUser();
         return Result.success(userVO);
@@ -86,7 +92,10 @@ public class UserController {
      * 更新用户信息
      */
     @PutMapping("/info")
-    @Operation(summary = "更新用户信息")
+    @Operation(
+            summary = "更新用户信息",
+            security = @SecurityRequirement(name = "Bearer Authentication")
+    )
     public Result<Boolean> updateUserInfo(@RequestBody @Valid UserUpdateDTO updateDTO) {
         UserVO currentUser = userService.getCurrentUser();
         boolean result = userService.updateUserInfo(currentUser.getId(), updateDTO);
@@ -97,7 +106,10 @@ public class UserController {
      * 修改密码
      */
     @PutMapping("/password")
-    @Operation(summary = "修改密码")
+    @Operation(
+            summary = "修改密码",
+            security = @SecurityRequirement(name = "Bearer Authentication")
+    )
     public Result<Boolean> updatePassword(
             @Parameter(description = "旧密码") @NotBlank(message = "旧密码不能为空") @RequestParam String oldPassword,
             @Parameter(description = "新密码") @NotBlank(message = "新密码不能为空") @RequestParam String newPassword,
@@ -133,7 +145,10 @@ public class UserController {
      * 根据ID查询用户
      */
     @GetMapping("/{id}")
-    @Operation(summary = "根据ID查询用户")
+    @Operation(
+            summary = "根据ID查询用户",
+            security = @SecurityRequirement(name = "Bearer Authentication")
+    )
     public Result<UserVO> getUserById(@PathVariable Long id) {
         UserVO userVO = userService.getUserById(id);
         return Result.success(userVO);
@@ -143,7 +158,11 @@ public class UserController {
      * 分页查询用户列表（管理员权限）
      */
     @GetMapping("/list")
-    @Operation(summary = "分页查询用户列表")
+    @Operation(
+            summary = "分页查询用户列表",
+            security = @SecurityRequirement(name = "Bearer Authentication")
+    )
+    @PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN')")
     public Result<Page<UserVO>> listUsers(
             @Parameter(description = "当前页码") @RequestParam(defaultValue = "1") long current,
             @Parameter(description = "每页大小") @RequestParam(defaultValue = "10") long size,
@@ -156,7 +175,11 @@ public class UserController {
      * 修改用户状态（管理员权限）
      */
     @PutMapping("/status/{id}/{status}")
-    @Operation(summary = "修改用户状态")
+    @Operation(
+            summary = "修改用户状态",
+            security = @SecurityRequirement(name = "Bearer Authentication")
+    )
+    @PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN')")
     public Result<Boolean> updateUserStatus(
             @Parameter(description = "用户ID") @PathVariable Long id,
             @Parameter(description = "状态：0-正常，1-禁用") @PathVariable Integer status) {
@@ -168,7 +191,11 @@ public class UserController {
      * 删除用户（管理员权限）
      */
     @DeleteMapping("/{id}")
-    @Operation(summary = "删除用户")
+    @Operation(
+            summary = "删除用户",
+            security = @SecurityRequirement(name = "Bearer Authentication")
+    )
+    @PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN')")
     public Result<Boolean> removeUser(@Parameter(description = "用户ID") @PathVariable Long id) {
         boolean result = userService.removeUser(id);
         return Result.success("删除成功", result);

@@ -32,7 +32,14 @@ public class UserLoginDTO implements Serializable {
     /**
      * 验证码
      */
+    @NotBlank(message = "验证码不能为空")
     private String captcha;
+
+    /**
+     * 验证码key
+     */
+    @NotBlank(message = "验证码key不能为空")
+    private String captchaKey;
 
     /**
      * 是否记住我

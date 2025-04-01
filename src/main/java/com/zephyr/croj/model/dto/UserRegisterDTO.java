@@ -53,4 +53,10 @@ public class UserRegisterDTO implements Serializable {
      */
     @NotBlank(message = "验证码不能为空")
     private String captcha;
+
+    /**
+     * 验证码key
+     */
+    @NotBlank(message = "验证码key不能为空")
+    private String captchaKey;
 }

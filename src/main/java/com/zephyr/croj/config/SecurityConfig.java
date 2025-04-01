@@ -64,7 +64,7 @@ public class SecurityConfig {
         configuration.setAllowedOrigins(List.of("http://localhost:3000"));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Requested-With"));
-        configuration.setExposedHeaders(List.of("Authorization"));
+        configuration.setExposedHeaders(List.of("Authorization", "Captcha-Key")); // 添加 Captcha-Key
         configuration.setAllowCredentials(true);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
@@ -111,7 +111,8 @@ public class SecurityConfig {
                         "/user/register",
                         "/user/login",
                         "/user/check/username/**",
-                        "/user/check/email/**"
+                        "/user/check/email/**",
+                        "/captcha/**"
                 ).permitAll()
                 // OPTIONS 请求放行
                 .antMatchers(HttpMethod.OPTIONS, "/**").permitAll()

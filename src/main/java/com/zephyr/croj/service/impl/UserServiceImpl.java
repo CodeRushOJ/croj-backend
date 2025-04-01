@@ -4,6 +4,8 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.zephyr.croj.common.constants.CaptchaConstants;
+import com.zephyr.croj.common.enums.ResultCodeEnum;
 import com.zephyr.croj.common.enums.UserRoleEnum;
 import com.zephyr.croj.common.exception.BusinessException;
 import com.zephyr.croj.mapper.UserMapper;
@@ -14,6 +16,7 @@ import com.zephyr.croj.model.entity.User;
 import com.zephyr.croj.model.vo.UserVO;
 import com.zephyr.croj.security.JwtTokenProvider;
 import com.zephyr.croj.service.UserService;
+import com.zephyr.croj.utils.RedisCache;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -52,6 +55,9 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     @Resource
     private JwtTokenProvider jwtTokenProvider;
 
+    @Resource
+    private RedisCache redisCache;
+
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long register(UserRegisterDTO registerDTO) {
@@ -70,8 +76,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
             throw new BusinessException(400, "两次密码不一致");
         }
 
-        // TODO 验证码校验逻辑（实际应用中需要实现）
-        // checkCaptcha(registerDTO.getCaptcha());
+        // 验证码校验
+        verifyCaptcha(registerDTO.getCaptcha(), registerDTO.getCaptchaKey());
 
         // 创建用户实体
         User user = new User();
@@ -88,8 +94,31 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         return user.getId();
     }
 
+    private void verifyCaptcha(String captcha, String captchaKey) {
+        if (StringUtils.hasLength(captcha) && StringUtils.hasLength(captchaKey)) {
+            String cacheCode = redisCache.getCacheObject(CaptchaConstants.CAPTCHA_CODE_KEY + ":" + captchaKey);
+
+            // 验证码已过期或不存在
+            if (cacheCode == null) {
+                throw new BusinessException(ResultCodeEnum.CAPTCHA_ERROR);
+            }
+
+            // 验证码不匹配
+            if (!cacheCode.equalsIgnoreCase(captcha)) {
+                throw new BusinessException(ResultCodeEnum.CAPTCHA_ERROR);
+            }
+
+            // 验证通过后，删除缓存中的验证码
+            redisCache.deleteObject(CaptchaConstants.CAPTCHA_CODE_KEY + ":" + captchaKey);
+        } else {
+            throw new BusinessException(ResultCodeEnum.CAPTCHA_ERROR);
+        }
+    }
+
     @Override
     public String login(UserLoginDTO loginDTO, String ip) {
+        // 验证码校验
+        verifyCaptcha(loginDTO.getCaptcha(), loginDTO.getCaptchaKey());
         try {
             // 使用Spring Security的AuthenticationManager进行身份验证
             Authentication authentication = authenticationManager.authenticate(

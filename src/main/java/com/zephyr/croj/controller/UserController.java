@@ -5,6 +5,7 @@ import com.zephyr.croj.common.response.Result;
 import com.zephyr.croj.model.dto.UserLoginDTO;
 import com.zephyr.croj.model.dto.UserRegisterDTO;
 import com.zephyr.croj.model.dto.UserUpdateDTO;
+import com.zephyr.croj.model.entity.User;
 import com.zephyr.croj.model.vo.UserVO;
 import com.zephyr.croj.service.UserService;
 import com.zephyr.croj.utils.IpUtil;
@@ -63,9 +64,9 @@ public class UserController {
         Map<String, Object> resultMap = new HashMap<>(2);
         resultMap.put("token", token);
 
-        // 设置请求头以获取当前用户信息
-        request.setAttribute("user-id", token);
-        UserVO userVO = userService.getCurrentUser();
+        // 直接查询用户信息，而不是通过getCurrentUser方法
+        User user = userService.getById(token);
+        UserVO userVO = userService.convertToVO(user);
         resultMap.put("userInfo", userVO);
 
         return Result.success("登录成功", resultMap);

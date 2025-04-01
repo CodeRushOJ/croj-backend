@@ -14,31 +14,29 @@ import com.zephyr.croj.model.vo.UserVO;
 import com.zephyr.croj.service.UserService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.DigestUtils;
 import org.springframework.util.StringUtils;
 
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
  * 用户服务实现类
- *
- 
  */
 @Service
 @Slf4j
 public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements UserService {
 
-    private static final String SALT = "coderush";
-
     @Resource
     private HttpServletRequest request;
+
+    @Resource
+    private PasswordEncoder passwordEncoder;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -65,8 +63,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         User user = new User();
         user.setUsername(registerDTO.getUsername());
         user.setEmail(registerDTO.getEmail());
-        // 密码加密 - 简单MD5加盐
-        user.setPassword(encryptPassword(registerDTO.getPassword()));
+        // 使用 Spring Security 的 BCrypt 密码编码器
+        user.setPassword(passwordEncoder.encode(registerDTO.getPassword()));
         user.setRole(0); // 默认为普通用户
         user.setStatus(0); // 默认为正常状态
         user.setIsDeleted(0); // 默认未删除
@@ -84,8 +82,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
             throw new BusinessException(400, "用户名或密码错误");
         }
 
-        // 验证密码
-        if (matchPassword(loginDTO.getPassword(), user.getPassword())) {
+        // 验证密码 - 使用 Spring Security 的密码匹配
+        if (!passwordEncoder.matches(loginDTO.getPassword(), user.getPassword())) {
             throw new BusinessException(400, "用户名或密码错误");
         }
 
@@ -155,8 +153,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
             throw new BusinessException(404, "用户不存在");
         }
 
-        // 验证旧密码
-        if (matchPassword(oldPassword, user.getPassword())) {
+        // 验证旧密码 - 使用 Spring Security 的密码匹配
+        if (!passwordEncoder.matches(oldPassword, user.getPassword())) {
             throw new BusinessException(400, "旧密码错误");
         }
 
@@ -165,8 +163,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
             throw new BusinessException(400, "两次密码不一致");
         }
 
-        // 更新密码
-        user.setPassword(encryptPassword(newPassword));
+        // 更新密码 - 使用 Spring Security 的密码编码
+        user.setPassword(passwordEncoder.encode(newPassword));
         return updateById(user);
     }
 
@@ -283,19 +281,5 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         userVO.setStatusName(statusName);
 
         return userVO;
-    }
-
-    /**
-     * 密码加密
-     */
-    private String encryptPassword(String password) {
-        return DigestUtils.md5DigestAsHex((SALT + password).getBytes(StandardCharsets.UTF_8));
-    }
-
-    /**
-     * 密码匹配
-     */
-    private boolean matchPassword(String inputPassword, String encryptedPassword) {
-        return !encryptPassword(inputPassword).equals(encryptedPassword);
     }
 }

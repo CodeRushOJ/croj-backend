@@ -71,7 +71,12 @@ public enum ResultCodeEnum {
     /**
      * 用户不存在
      */
-    USER_NOT_EXIST(40007, "用户不存在");
+    USER_NOT_EXIST(40007, "用户不存在"),
+
+    /**
+     * 邮箱验证码错误
+     */
+    EMAIL_CODE_ERROR(40008, "邮箱验证码错误或已过期");
 
     /**
      * 状态码

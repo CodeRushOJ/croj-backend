@@ -69,6 +69,11 @@ public class User implements Serializable {
     private String school;
 
     /**
+     * 邮箱是否验证：0-未验证，1-已验证
+     */
+    private Integer emailVerified;
+
+    /**
      * 创建时间
      */
     @TableField(fill = FieldFill.INSERT)

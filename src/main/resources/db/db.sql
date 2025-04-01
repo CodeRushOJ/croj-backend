@@ -20,11 +20,8 @@ CREATE TABLE IF NOT EXISTS `t_user` (
     `last_login_time` datetime DEFAULT NULL COMMENT '最后登录时间',
     `last_login_ip` varchar(50) DEFAULT NULL COMMENT '最后登录IP',
     `is_deleted` tinyint(1) NOT NULL DEFAULT '0' COMMENT '是否删除：0-未删除，1-已删除',
+    `email_verified` tinyint(1) NOT NULL DEFAULT '0' COMMENT '邮箱是否验证：0-未验证，1-已验证',
     PRIMARY KEY (`id`),
     UNIQUE KEY `idx_username` (`username`),
     UNIQUE KEY `idx_email` (`email`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户表';
-
--- 初始化超级管理员账号
-INSERT INTO `t_user` (`username`, `password`, `email`, `role`, `status`, `is_deleted`)
-VALUES ('admin', '$2a$10$MqmK.fUrcSITOVhDdCKs4uBJ0TU6bIhLYONQ5W.hWJNjlHyFT6KV2', 'admin@coderush.com', 2, 0, 0);

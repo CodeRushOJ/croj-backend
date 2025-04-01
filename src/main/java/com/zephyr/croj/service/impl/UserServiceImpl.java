@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.zephyr.croj.common.constants.CaptchaConstants;
+import com.zephyr.croj.common.constants.EmailConstants;
 import com.zephyr.croj.common.enums.ResultCodeEnum;
 import com.zephyr.croj.common.enums.UserRoleEnum;
 import com.zephyr.croj.common.exception.BusinessException;
@@ -15,10 +16,12 @@ import com.zephyr.croj.model.dto.UserUpdateDTO;
 import com.zephyr.croj.model.entity.User;
 import com.zephyr.croj.model.vo.UserVO;
 import com.zephyr.croj.security.JwtTokenProvider;
+import com.zephyr.croj.service.EmailService;
 import com.zephyr.croj.service.UserService;
 import com.zephyr.croj.utils.RedisCache;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -34,6 +37,9 @@ import javax.servlet.http.HttpServletRequest;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+import java.util.Random;
+import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 /**
@@ -58,6 +64,9 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     @Resource
     private RedisCache redisCache;
 
+    @Resource
+    private EmailService emailService;
+
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long register(UserRegisterDTO registerDTO) {
@@ -76,7 +85,20 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
             throw new BusinessException(400, "两次密码不一致");
         }
 
-        // 验证码校验
+        // 邮箱验证码校验
+        if (StringUtils.hasLength(registerDTO.getEmailCode())) {
+            // 获取缓存中的邮箱验证码
+            String cacheCode = redisCache.getCacheObject(EmailConstants.EMAIL_CODE_KEY + registerDTO.getEmail());
+            if (cacheCode == null || !cacheCode.equals(registerDTO.getEmailCode())) {
+                throw new BusinessException(ResultCodeEnum.EMAIL_CODE_ERROR);
+            }
+            // 验证成功，删除缓存中的验证码
+            redisCache.deleteObject(EmailConstants.EMAIL_CODE_KEY + registerDTO.getEmail());
+        } else {
+            throw new BusinessException(ResultCodeEnum.EMAIL_CODE_ERROR);
+        }
+
+        // 常规验证码校验（图形验证码）
         verifyCaptcha(registerDTO.getCaptcha(), registerDTO.getCaptchaKey());
 
         // 创建用户实体
@@ -88,9 +110,11 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         user.setRole(0); // 默认为普通用户
         user.setStatus(0); // 默认为正常状态
         user.setIsDeleted(0); // 默认未删除
+        user.setEmailVerified(1); // 通过邮箱验证码注册的，已验证
 
         // 保存用户
         save(user);
+
         return user.getId();
     }
 
@@ -176,6 +200,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
                 throw new BusinessException(400, "邮箱已存在");
             }
             user.setEmail(updateDTO.getEmail());
+            // 新邮箱需要重新验证
+            user.setEmailVerified(0);
         }
 
         // 更新其他字段
@@ -305,6 +331,79 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
+    public boolean verifyUserEmail(Long userId) {
+        User user = getById(userId);
+        if (user == null) {
+            throw new BusinessException(404, "用户不存在");
+        }
+        user.setEmailVerified(1);
+        return updateById(user);
+    }
+
+    @Override
+    public boolean sendEmailVerificationCode(String email, String username) {
+        if (emailService == null) {
+            log.warn("邮件服务未配置，无法发送验证码");
+            return false;
+        }
+
+        // 生成6位随机验证码
+        String code = generateRandomCode(6);
+
+        // 存入Redis，有效期5分钟
+        redisCache.setCacheObject(
+                EmailConstants.EMAIL_CODE_KEY + email,
+                code,
+                EmailConstants.EMAIL_CODE_EXPIRATION,
+                TimeUnit.MINUTES
+        );
+
+        // 发送邮件
+        return emailService.sendVerificationCode(email, username, code);
+    }
+
+    @Override
+    public boolean sendVerificationLink(Long userId) {
+        if (emailService == null) {
+            log.warn("邮件服务未配置，无法发送验证邮件");
+            return false;
+        }
+
+        User user = getById(userId);
+        if (user == null) {
+            throw new BusinessException(404, "用户不存在");
+        }
+
+        // 生成验证码
+        String code = UUID.randomUUID().toString();
+
+        // 存入Redis
+        redisCache.setCacheObject(
+                EmailConstants.EMAIL_VERIFY_CODE_KEY + userId,
+                code,
+                EmailConstants.EMAIL_VERIFY_EXPIRATION,
+                TimeUnit.MINUTES
+        );
+
+        // 发送邮件
+        return emailService.sendVerificationLink(user.getEmail(), user.getUsername(), userId, code);
+    }
+
+    /**
+     * 生成随机验证码
+     */
+    private String generateRandomCode(int length) {
+        String chars = "0123456789";
+        StringBuilder sb = new StringBuilder();
+        Random random = new Random();
+        for (int i = 0; i < length; i++) {
+            sb.append(chars.charAt(random.nextInt(chars.length())));
+        }
+        return sb.toString();
+    }
+
+    @Override
     public UserVO convertToVO(User user) {
         if (user == null) {
             return null;
@@ -314,13 +413,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         BeanUtils.copyProperties(user, userVO);
 
         // 设置角色名称
-        String roleName = switch (user.getRole()) {
-            case 0 -> "普通用户";
-            case 1 -> "管理员";
-            case 2 -> "超级管理员";
-            default -> "未知角色";
-        };
-        userVO.setRoleName(roleName);
+        UserRoleEnum roleEnum = UserRoleEnum.getByCode(user.getRole());
+        userVO.setRoleName(roleEnum != null ? roleEnum.getDesc() : "未知角色");
 
         // 设置状态名称
         String statusName = switch (user.getStatus()) {

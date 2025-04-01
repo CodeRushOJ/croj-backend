@@ -8,8 +8,6 @@ import java.time.LocalDateTime;
 
 /**
  * 用户视图对象
- *
- 
  */
 @Data
 public class UserVO implements Serializable {
@@ -71,6 +69,11 @@ public class UserVO implements Serializable {
      * 学校
      */
     private String school;
+
+    /**
+     * 邮箱是否验证：0-未验证，1-已验证
+     */
+    private Integer emailVerified;
 
     /**
      * 创建时间

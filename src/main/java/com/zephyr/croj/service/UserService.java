@@ -10,8 +10,6 @@ import com.zephyr.croj.model.vo.UserVO;
 
 /**
  * 用户服务接口
- *
- 
  */
 public interface UserService extends IService<User> {
 
@@ -109,6 +107,31 @@ public interface UserService extends IService<User> {
      * @return 存在返回true，不存在返回false
      */
     boolean checkEmailExists(String email);
+
+    /**
+     * 验证用户邮箱
+     *
+     * @param userId 用户ID
+     * @return 是否验证成功
+     */
+    boolean verifyUserEmail(Long userId);
+
+    /**
+     * 发送邮箱验证码（用于注册）
+     *
+     * @param email 邮箱
+     * @param username 用户名
+     * @return 是否发送成功
+     */
+    boolean sendEmailVerificationCode(String email, String username);
+
+    /**
+     * 发送邮箱验证链接
+     *
+     * @param userId 用户ID
+     * @return 是否发送成功
+     */
+    boolean sendVerificationLink(Long userId);
 
     /**
      * 用户实体转视图对象

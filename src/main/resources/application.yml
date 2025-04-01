@@ -30,6 +30,25 @@ spring:
     time-zone: GMT+8
     serialization:
       write-dates-as-timestamps: false
+  mail:
+    host: smtp.163.com
+    port: 465
+    protocol: smtp
+    default-encoding: UTF-8
+    username: your username
+    password: your password
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+          ssl:
+            enable: true
+          socketFactory:
+            port: 465
+            class: javax.net.ssl.SSLSocketFactory
 
 mybatis-plus:
   mapper-locations: classpath*:/mapper/*.xml
@@ -73,3 +92,7 @@ springdoc:
   default-consumes-media-type: application/json
   default-produces-media-type: application/json
   paths-to-match: /**
+
+# Application specific configuration
+app:
+  frontend-url: http://localhost:3000

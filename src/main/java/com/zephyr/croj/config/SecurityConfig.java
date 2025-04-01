@@ -112,7 +112,8 @@ public class SecurityConfig {
                         "/user/login",
                         "/user/check/username/**",
                         "/user/check/email/**",
-                        "/captcha/**"
+                        "/captcha/**",
+                        "/email/code"
                 ).permitAll()
                 // OPTIONS 请求放行
                 .antMatchers(HttpMethod.OPTIONS, "/**").permitAll()

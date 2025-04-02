@@ -71,17 +71,17 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     public Long register(UserRegisterDTO registerDTO) {
         // 验证用户名是否存在
         if (checkUsernameExists(registerDTO.getUsername())) {
-            throw new BusinessException(400, "用户名已存在");
+            throw new BusinessException(ResultCodeEnum.ACCOUNT_EXIST);
         }
 
         // 验证邮箱是否存在
         if (checkEmailExists(registerDTO.getEmail())) {
-            throw new BusinessException(400, "邮箱已存在");
+            throw new BusinessException(ResultCodeEnum.EMAIL_EXIST);
         }
 
         // 验证两次密码是否一致
         if (!registerDTO.getPassword().equals(registerDTO.getConfirmPassword())) {
-            throw new BusinessException(400, "两次密码不一致");
+            throw new BusinessException(ResultCodeEnum.PASSWORD_NOT_MATCH);
         }
 
         // 邮箱验证码校验
@@ -142,6 +142,19 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     public String login(UserLoginDTO loginDTO, String ip) {
         // 验证码校验
         verifyCaptcha(loginDTO.getCaptcha(), loginDTO.getCaptchaKey());
+        // 先查询用户检查状态
+        User user = baseMapper.findByUsernameOrEmail(loginDTO.getAccount());
+
+        if (user == null) {
+            // 用户不存在
+            throw new BusinessException(ResultCodeEnum.USER_NOT_EXIST);
+        }
+
+        if (user.getStatus() == 1) {
+            // 用户被禁用
+            throw new BusinessException(ResultCodeEnum.ACCOUNT_DISABLED);
+        }
+
         try {
             // 使用Spring Security的AuthenticationManager进行身份验证
             Authentication authentication = authenticationManager.authenticate(
@@ -150,9 +163,6 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
 
             // 认证成功，设置Authentication到SecurityContext
             SecurityContextHolder.getContext().setAuthentication(authentication);
-
-            // 根据用户名查询用户获取ID和角色信息
-            User user = baseMapper.findByUsernameOrEmail(loginDTO.getAccount());
 
             // 更新最后登录时间和IP
             baseMapper.updateLastLogin(user.getId(), ip);
@@ -163,7 +173,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
 
         } catch (AuthenticationException e) {
             log.error("认证失败: {}", e.getMessage());
-            throw new BusinessException(400, "用户名或密码错误");
+            // 统一返回账号或密码错误，不区分具体原因，避免安全问题
+            throw new BusinessException(ResultCodeEnum.ACCOUNT_ERROR);
         }
     }
 
@@ -172,13 +183,13 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         // 从Spring Security的SecurityContext中获取当前认证用户
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !authentication.isAuthenticated()) {
-            throw new BusinessException(401, "未登录");
+            throw new BusinessException(ResultCodeEnum.UNAUTHORIZED);
         }
 
         // 从请求属性中获取用户ID（由JwtAuthenticationFilter设置）
         Object userIdObj = request.getAttribute("userId");
         if (userIdObj == null) {
-            throw new BusinessException(401, "无法获取用户信息");
+            throw new BusinessException(ResultCodeEnum.USER_NOT_EXIST);
         }
 
         Long userId = (Long) userIdObj;
@@ -190,13 +201,13 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     public boolean updateUserInfo(Long userId, UserUpdateDTO updateDTO) {
         User user = getById(userId);
         if (user == null) {
-            throw new BusinessException(404, "用户不存在");
+            throw new BusinessException(ResultCodeEnum.USER_NOT_EXIST);
         }
 
         // 如果更新邮箱，需要验证邮箱是否已存在
         if (StringUtils.hasLength(updateDTO.getEmail()) && !Objects.equals(user.getEmail(), updateDTO.getEmail())) {
             if (checkEmailExists(updateDTO.getEmail())) {
-                throw new BusinessException(400, "邮箱已存在");
+                throw new BusinessException(ResultCodeEnum.EMAIL_EXIST);
             }
             user.setEmail(updateDTO.getEmail());
             // 新邮箱需要重新验证
@@ -225,17 +236,17 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     public boolean updatePassword(Long userId, String oldPassword, String newPassword, String confirmPassword) {
         User user = getById(userId);
         if (user == null) {
-            throw new BusinessException(404, "用户不存在");
+            throw new BusinessException(ResultCodeEnum.ACCOUNT_EXIST);
         }
 
         // 验证旧密码 - 使用 Spring Security 的密码匹配
         if (!passwordEncoder.matches(oldPassword, user.getPassword())) {
-            throw new BusinessException(400, "旧密码错误");
+            throw new BusinessException(ResultCodeEnum.PASSWORD_ERROR);
         }
 
         // 验证两次密码是否一致
         if (!newPassword.equals(confirmPassword)) {
-            throw new BusinessException(400, "两次密码不一致");
+            throw new BusinessException(ResultCodeEnum.PASSWORD_NOT_MATCH);
         }
 
         // 更新密码 - 使用 Spring Security 的密码编码
@@ -247,7 +258,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     public UserVO getUserById(Long userId) {
         User user = getById(userId);
         if (user == null) {
-            throw new BusinessException(404, "用户不存在");
+            throw new BusinessException(ResultCodeEnum.USER_NOT_EXIST);
         }
 
         return convertToVO(user);
@@ -290,16 +301,20 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     public boolean updateUserStatus(Long userId, Integer status) {
         User user = getById(userId);
         if (user == null) {
-            throw new BusinessException(404, "用户不存在");
+            throw new BusinessException(ResultCodeEnum.USER_NOT_EXIST);
         }
 
         // 防止超级管理员被禁用
         if (user.getRole() == 2) {
-            throw new BusinessException(403, "超级管理员不能被禁用");
+            throw new BusinessException(ResultCodeEnum.DISABLED_ERROR);
         }
-
-        user.setStatus(status);
-        return updateById(user);
+        try {
+            // 更新用户状态
+            user.setStatus(status);
+            return updateById(user);
+        } catch (Exception e) {
+            throw new BusinessException(ResultCodeEnum.DISABLED_ERROR);
+        }
     }
 
     @Override
@@ -307,7 +322,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     public boolean removeUser(Long userId) {
         User user = getById(userId);
         if (user == null) {
-            throw new BusinessException(404, "用户不存在");
+            throw new BusinessException(ResultCodeEnum.USER_NOT_EXIST);
         }
 
         // 防止超级管理员被删除
@@ -334,7 +349,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     public boolean verifyUserEmail(Long userId) {
         User user = getById(userId);
         if (user == null) {
-            throw new BusinessException(404, "用户不存在");
+            throw new BusinessException(ResultCodeEnum.USER_NOT_EXIST);
         }
         user.setEmailVerified(1);
         return updateById(user);
@@ -371,7 +386,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
 
         User user = getById(userId);
         if (user == null) {
-            throw new BusinessException(404, "用户不存在");
+            throw new BusinessException(ResultCodeEnum.ACCOUNT_EXIST);
         }
 
         // 生成验证码

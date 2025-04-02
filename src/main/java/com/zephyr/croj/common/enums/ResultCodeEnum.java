@@ -76,7 +76,22 @@ public enum ResultCodeEnum {
     /**
      * 邮箱验证码错误
      */
-    EMAIL_CODE_ERROR(40008, "邮箱验证码错误或已过期");
+    EMAIL_CODE_ERROR(40008, "邮箱验证码错误或已过期"),
+
+    /**
+     * 邮箱已存在
+     */
+    EMAIL_EXIST(40009, "邮箱已存在"),
+
+    /**
+     * 禁用错误
+     */
+    DISABLED_ERROR(40010, "无法禁用账户"),
+
+    /**
+     * 邮箱已验证
+     */
+    EMAIL_VERIFIED(40011, "邮箱已验证");
 
     /**
      * 状态码

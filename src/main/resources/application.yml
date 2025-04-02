@@ -99,10 +99,18 @@ springdoc:
   paths-to-match: /**
 
 # Application specific configuration
+# Add these properties to your application.yml file
+
+# File storage configuration
 app:
   upload:
-    dir: uploads  # Root directory for file uploads
+    # Base directory for file uploads (absolute path)
+    base-dir: ${FILE_UPLOAD_DIR:uploads}
+    # Maximum file size (matches Spring's multipart config)
+    max-file-size: 2MB
+    # Avatar specific settings
     avatar:
-      dir: avatar  # Subdirectory for avatar images
-  domain: http://localhost:8080  # Your application domain for file URLs
+      dir: avatar
+      # URL path where avatars can be accessed
+      url-path: /uploads/avatar
   frontend-url: http://localhost:3000

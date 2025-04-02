@@ -104,23 +104,6 @@ public class UserController {
     }
 
     /**
-     * 更新用户头像
-     */
-    @PostMapping("/avatar")
-    @Operation(
-            summary = "更新用户头像",
-            security = @SecurityRequirement(name = "Bearer Authentication")
-    )
-    public Result<String> updateAvatar(@RequestPart("avatar") MultipartFile avatarFile) {
-        if (avatarFile == null || avatarFile.isEmpty()) {
-            throw new BusinessException("头像文件不能为空");
-        }
-        UserVO currentUser = userService.getCurrentUser();
-        String avatarUrl = userService.updateUserAvatar(currentUser.getId(), avatarFile);
-        return Result.success("头像更新成功", avatarUrl);
-    }
-
-    /**
      * 修改密码
      */
     @PutMapping("/password")

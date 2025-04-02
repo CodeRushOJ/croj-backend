@@ -143,11 +143,11 @@ public interface UserService extends IService<User> {
     UserVO convertToVO(User user);
 
     /**
-     * 更新用户头像
+     * Update user avatar
      *
-     * @param userId 用户ID
-     * @param avatarFile 头像文件
-     * @return 头像URL
+     * @param userId    User ID
+     * @param avatarUrl URL of the avatar
+     * @return true if successful, false otherwise
      */
-    String updateUserAvatar(Long userId, MultipartFile avatarFile);
+    boolean updateUserAvatar(Long userId, String avatarUrl);
 }

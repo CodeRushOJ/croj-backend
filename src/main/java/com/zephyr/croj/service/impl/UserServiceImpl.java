@@ -17,7 +17,7 @@ import com.zephyr.croj.model.entity.User;
 import com.zephyr.croj.model.vo.UserVO;
 import com.zephyr.croj.security.JwtTokenProvider;
 import com.zephyr.croj.service.EmailService;
-import com.zephyr.croj.service.FileService;
+import com.zephyr.croj.service.FileStorageService;
 import com.zephyr.croj.service.UserService;
 import com.zephyr.croj.utils.RedisCache;
 import lombok.extern.slf4j.Slf4j;
@@ -68,9 +68,6 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
 
     @Resource
     private EmailService emailService;
-
-    @Resource
-    private FileService fileService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -449,37 +446,13 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public String updateUserAvatar(Long userId, MultipartFile avatarFile) {
-        if (avatarFile == null || avatarFile.isEmpty()) {
-            throw new BusinessException("头像文件不能为空");
-        }
-
+    public boolean updateUserAvatar(Long userId, String avatarUrl) {
         User user = getById(userId);
         if (user == null) {
             throw new BusinessException(ResultCodeEnum.USER_NOT_EXIST);
         }
 
-        try {
-            // 上传新头像
-            String avatarUrl = fileService.uploadAvatar(userId, avatarFile);
-
-            // 如果用户已有头像，则删除旧头像
-            if (user.getAvatar() != null && !user.getAvatar().isEmpty()) {
-                fileService.deleteAvatar(user.getAvatar());
-            }
-
-            // 更新用户头像URL
-            user.setAvatar(avatarUrl);
-            boolean updated = updateById(user);
-
-            if (!updated) {
-                throw new BusinessException(ResultCodeEnum.UPDATE_ERROR);
-            }
-
-            return avatarUrl;
-        } catch (IOException e) {
-            log.error("头像上传失败: {}", e.getMessage());
-            throw new BusinessException(ResultCodeEnum.UPLOAD_ERROR);
-        }
+        user.setAvatar(avatarUrl);
+        return updateById(user);
     }
 }

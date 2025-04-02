@@ -120,6 +120,7 @@ public class SecurityConfig {
                 // 管理员接口权限
                 .antMatchers("/user/list").hasAnyRole("ADMIN", "SUPER_ADMIN")
                 .antMatchers("/user/status/**").hasAnyRole("ADMIN", "SUPER_ADMIN")
+                .antMatchers("/admin/**").hasAnyRole("ADMIN", "SUPER_ADMIN")
                 .antMatchers(HttpMethod.DELETE, "/user/**").hasAnyRole("ADMIN", "SUPER_ADMIN")
                 // 其他所有请求需要认证
                 .anyRequest().authenticated();

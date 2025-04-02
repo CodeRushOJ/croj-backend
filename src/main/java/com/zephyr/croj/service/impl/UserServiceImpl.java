@@ -21,7 +21,6 @@ import com.zephyr.croj.service.UserService;
 import com.zephyr.croj.utils.RedisCache;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -159,7 +158,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
             baseMapper.updateLastLogin(user.getId(), ip);
 
             // 生成JWT令牌
-            List<String> roles = Collections.singletonList(UserRoleEnum.getByCode(user.getRole()).getDesc());
+            List<String> roles = Collections.singletonList("ROLE_" + UserRoleEnum.getByCode(user.getRole()).getDesc());
             return jwtTokenProvider.createToken(user.getId(), user.getUsername(), roles);
 
         } catch (AuthenticationException e) {

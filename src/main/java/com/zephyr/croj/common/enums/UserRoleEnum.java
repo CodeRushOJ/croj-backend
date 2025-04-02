@@ -11,17 +11,17 @@ public enum UserRoleEnum {
     /**
      * 普通用户
      */
-    USER(0, "普通用户"),
+    USER(0, "USER"),
 
     /**
      * 管理员
      */
-    ADMIN(1, "管理员"),
+    ADMIN(1, "ADMIN"),
 
     /**
      * 超级管理员
      */
-    SUPER_ADMIN(2, "超级管理员");
+    SUPER_ADMIN(2, "SUPER_ADMIN");
 
     /**
      * 角色码

@@ -91,7 +91,17 @@ public enum ResultCodeEnum {
     /**
      * 邮箱已验证
      */
-    EMAIL_VERIFIED(40011, "邮箱已验证");
+    EMAIL_VERIFIED(40011, "邮箱已验证"),
+
+    /**
+     * 更新失败
+     */
+    UPDATE_ERROR(40012, "更新失败"),
+
+    /**
+     * 上传失败
+     */
+    UPLOAD_ERROR(40013, "上传失败");
 
     /**
      * 状态码

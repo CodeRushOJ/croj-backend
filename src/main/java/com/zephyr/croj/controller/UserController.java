@@ -1,6 +1,7 @@
 package com.zephyr.croj.controller;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.zephyr.croj.common.exception.BusinessException;
 import com.zephyr.croj.common.response.Result;
 import com.zephyr.croj.model.dto.UserLoginDTO;
 import com.zephyr.croj.model.dto.UserRegisterDTO;
@@ -16,15 +17,15 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.MediaType;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.validation.Valid;
 import javax.validation.constraints.NotBlank;
-import java.util.HashMap;
-import java.util.Map;
 
 /**
  * 用户控制器
@@ -100,6 +101,23 @@ public class UserController {
         UserVO currentUser = userService.getCurrentUser();
         boolean result = userService.updateUserInfo(currentUser.getId(), updateDTO);
         return Result.success("更新成功", result);
+    }
+
+    /**
+     * 更新用户头像
+     */
+    @PostMapping("/avatar")
+    @Operation(
+            summary = "更新用户头像",
+            security = @SecurityRequirement(name = "Bearer Authentication")
+    )
+    public Result<String> updateAvatar(@RequestPart("avatar") MultipartFile avatarFile) {
+        if (avatarFile == null || avatarFile.isEmpty()) {
+            throw new BusinessException("头像文件不能为空");
+        }
+        UserVO currentUser = userService.getCurrentUser();
+        String avatarUrl = userService.updateUserAvatar(currentUser.getId(), avatarFile);
+        return Result.success("头像更新成功", avatarUrl);
     }
 
     /**

@@ -36,6 +36,8 @@ public class KaptchaConfig {
         properties.setProperty("kaptcha.textproducer.char.length", "4");
         // 字体
         properties.setProperty("kaptcha.textproducer.font.names", "宋体,楷体,微软雅黑");
+        // 使用自定义文本生成器
+        properties.setProperty("kaptcha.textproducer.impl", "com.zephyr.croj.config.CustomTextProducer");
 
         Config config = new Config(properties);
         defaultKaptcha.setConfig(config);

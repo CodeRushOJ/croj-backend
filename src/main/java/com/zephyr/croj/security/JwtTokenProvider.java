@@ -62,10 +62,15 @@ public class JwtTokenProvider {
         Date now = new Date();
         Date validity = new Date(now.getTime() + tokenValidityInMilliseconds);
 
+        // 确保角色以"ROLE_"开头
+        List<String> formattedRoles = roles.stream()
+                .map(role -> role.startsWith("ROLE_") ? role : "ROLE_" + role)
+                .toList();
+
         return Jwts.builder()
                 .setSubject(username)
                 .claim("userId", userId)
-                .claim("roles", roles)
+                .claim("roles", formattedRoles)
                 .setIssuedAt(now)
                 .setExpiration(validity)
                 .signWith(secretKey)

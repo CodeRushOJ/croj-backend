@@ -7,6 +7,7 @@ import com.zephyr.croj.model.dto.UserRegisterDTO;
 import com.zephyr.croj.model.dto.UserUpdateDTO;
 import com.zephyr.croj.model.entity.User;
 import com.zephyr.croj.model.vo.UserVO;
+import org.springframework.web.multipart.MultipartFile;
 
 /**
  * 用户服务接口
@@ -140,4 +141,13 @@ public interface UserService extends IService<User> {
      * @return 用户视图对象
      */
     UserVO convertToVO(User user);
+
+    /**
+     * 更新用户头像
+     *
+     * @param userId 用户ID
+     * @param avatarFile 头像文件
+     * @return 头像URL
+     */
+    String updateUserAvatar(Long userId, MultipartFile avatarFile);
 }

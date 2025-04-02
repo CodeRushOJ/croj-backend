@@ -2,7 +2,6 @@ server:
   port: 8080
   servlet:
     context-path: /api
-
 spring:
   application:
     name: coderush-oj
@@ -49,6 +48,12 @@ spring:
           socketFactory:
             port: 465
             class: javax.net.ssl.SSLSocketFactory
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 5MB
+      max-request-size: 10MB
+      file-size-threshold: 2KB
 
 mybatis-plus:
   mapper-locations: classpath*:/mapper/*.xml
@@ -95,4 +100,9 @@ springdoc:
 
 # Application specific configuration
 app:
+  upload:
+    dir: uploads  # Root directory for file uploads
+    avatar:
+      dir: avatar  # Subdirectory for avatar images
+  domain: http://localhost:8080  # Your application domain for file URLs
   frontend-url: http://localhost:3000

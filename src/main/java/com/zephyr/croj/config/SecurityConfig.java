@@ -106,6 +106,8 @@ public class SecurityConfig {
                         "/swagger-resources/**",
                         "/webjars/**"
                 ).permitAll()
+                // 允许所有人访问上传的文件资源
+                .antMatchers("/uploads/**").permitAll()
                 // 允许所有人访问登录和注册接口
                 .antMatchers(
                         "/user/register",

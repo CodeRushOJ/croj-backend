@@ -18,8 +18,6 @@ import java.util.Set;
 
 /**
  * 全局异常处理器
- *
- 
  */
 @Slf4j
 @RestControllerAdvice
@@ -46,7 +44,7 @@ public class GlobalExceptionHandler {
         for (FieldError fieldError : bindingResult.getFieldErrors()) {
             errorMsg.append(fieldError.getField()).append(": ").append(fieldError.getDefaultMessage()).append(", ");
         }
-        String message = errorMsg.length() > 0 ? errorMsg.substring(0, errorMsg.length() - 2) : "参数错误";
+        String message = !errorMsg.isEmpty() ? errorMsg.substring(0, errorMsg.length() - 2) : "参数错误";
         log.error("参数校验异常: {}", message);
         return Result.error(ResultCodeEnum.PARAM_ERROR.getCode(), message);
     }
@@ -62,7 +60,7 @@ public class GlobalExceptionHandler {
         for (ConstraintViolation<?> violation : violations) {
             errorMsg.append(violation.getPropertyPath()).append(": ").append(violation.getMessage()).append(", ");
         }
-        String message = errorMsg.length() > 0 ? errorMsg.substring(0, errorMsg.length() - 2) : "参数错误";
+        String message = !errorMsg.isEmpty() ? errorMsg.substring(0, errorMsg.length() - 2) : "参数错误";
         log.error("参数校验异常: {}", message);
         return Result.error(ResultCodeEnum.PARAM_ERROR.getCode(), message);
     }
@@ -78,7 +76,7 @@ public class GlobalExceptionHandler {
         for (FieldError fieldError : bindingResult.getFieldErrors()) {
             errorMsg.append(fieldError.getField()).append(": ").append(fieldError.getDefaultMessage()).append(", ");
         }
-        String message = errorMsg.length() > 0 ? errorMsg.substring(0, errorMsg.length() - 2) : "参数错误";
+        String message = !errorMsg.isEmpty() ? errorMsg.substring(0, errorMsg.length() - 2) : "参数错误";
         log.error("参数绑定异常: {}", message);
         return Result.error(ResultCodeEnum.PARAM_ERROR.getCode(), message);
     }

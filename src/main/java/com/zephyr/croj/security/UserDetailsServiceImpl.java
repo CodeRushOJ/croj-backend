@@ -34,8 +34,9 @@ public class UserDetailsServiceImpl implements UserDetailsService {
 
         // 检查用户状态
         if (user.getStatus() == 1) {
+            // 检查用户状态
             log.error("用户已被禁用: {}", username);
-            throw new UsernameNotFoundException("账号已被禁用");
+            throw new UsernameNotFoundException("用户已被禁用: " + username);
         }
 
         // 转换用户角色为Spring Security的权限

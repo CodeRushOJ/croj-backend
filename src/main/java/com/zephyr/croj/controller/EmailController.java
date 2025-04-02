@@ -40,7 +40,7 @@ public class EmailController {
     ) {
         // 检查邮箱是否已存在
         if (userService.checkEmailExists(email)) {
-            throw new BusinessException(ResultCodeEnum.ACCOUNT_EXIST.getCode(), "邮箱已被注册");
+            throw new BusinessException(ResultCodeEnum.EMAIL_EXIST);
         }
 
         // 发送验证码
@@ -67,7 +67,7 @@ public class EmailController {
 
         // 如果邮箱已验证，则返回错误
         if (user.getEmailVerified() != null && user.getEmailVerified() == 1) {
-            throw new BusinessException(ResultCodeEnum.ERROR.getCode(), "邮箱已验证");
+            throw new BusinessException(ResultCodeEnum.EMAIL_VERIFIED);
         }
 
         // 发送验证链接邮件
@@ -96,7 +96,7 @@ public class EmailController {
         String cacheCode = redisCache.getCacheObject(EmailConstants.EMAIL_VERIFY_CODE_KEY + userId);
 
         if (!StringUtils.hasText(cacheCode) || !cacheCode.equals(code)) {
-            throw new BusinessException(ResultCodeEnum.ERROR.getCode(), "验证码无效或已过期");
+            throw new BusinessException(ResultCodeEnum.EMAIL_CODE_ERROR);
         }
 
         // 更新用户邮箱验证状态

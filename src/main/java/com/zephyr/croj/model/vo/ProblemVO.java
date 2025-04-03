@@ -1,5 +1,6 @@
 package com.zephyr.croj.model.vo;
 
+import com.baomidou.mybatisplus.annotation.TableLogic;
 import com.zephyr.croj.model.entity.ProblemTag;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
@@ -52,7 +53,7 @@ public class ProblemVO implements Serializable {
     /**
      * 提示与说明
      */
-    private String hints;
+    private List<String> hints;
 
     /**
      * 测试样例，包含输入、输出和解释
@@ -80,6 +81,16 @@ public class ProblemVO implements Serializable {
     private Boolean isSpecialJudge;
 
     /**
+     * 特判代码
+     */
+    private String specialJudgeCode;
+
+    /**
+     * 特判代码语言
+     */
+    private String specialJudgeLanguage;
+
+    /**
      * 评判模式（0-ACM模式，1-OI模式）
      */
     private Integer judgeMode;
@@ -93,6 +104,11 @@ public class ProblemVO implements Serializable {
      * 题目来源
      */
     private String source;
+
+    /**
+     * 创建人ID
+     */
+    private Long createUserId;
 
     /**
      * 提交次数
@@ -128,4 +144,9 @@ public class ProblemVO implements Serializable {
      * 更新时间
      */
     private LocalDateTime updateTime;
+
+    /**
+     * 是否删除（0-未删除，1-已删除）
+     */
+    private Integer isDeleted;
 }

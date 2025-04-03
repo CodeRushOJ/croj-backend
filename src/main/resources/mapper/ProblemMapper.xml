@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zephyr.croj.mapper.ProblemMapper">
+
+    <!-- 通用查询映射结果 -->
+    <resultMap id="BaseResultMap" type="com.zephyr.croj.model.entity.Problem">
+        <id column="id" property="id" />
+        <result column="problem_no" property="problemNo" />
+        <result column="title" property="title" />
+        <result column="description" property="description" />
+        <result column="input_description" property="inputDescription" />
+        <result column="output_description" property="outputDescription" />
+        <result column="hints" property="hints" typeHandler="com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler"/>
+        <result column="samples" property="samples" typeHandler="com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler" />
+        <result column="time_limit" property="timeLimit" />
+        <result column="memory_limit" property="memoryLimit" />
+        <result column="difficulty" property="difficulty" />
+        <result column="is_special_judge" property="isSpecialJudge" />
+        <result column="special_judge_code" property="specialJudgeCode" />
+        <result column="special_judge_language" property="specialJudgeLanguage" />
+        <result column="judge_mode" property="judgeMode" />
+        <result column="total_score" property="totalScore" />
+        <result column="source" property="source" />
+        <result column="create_user_id" property="createUserId" />
+        <result column="submit_count" property="submitCount" />
+        <result column="accepted_count" property="acceptedCount" />
+        <result column="status" property="status" />
+        <result column="create_time" property="createTime" />
+        <result column="update_time" property="updateTime" />
+        <result column="is_deleted" property="isDeleted" />
+    </resultMap>
+
+    <!-- 带标签和用户提交信息的问题列表结果映射 -->
+    <resultMap id="ProblemVOResultMap" type="com.zephyr.croj.model.vo.ProblemVO" extends="BaseResultMap">
+        <result column="user_status" property="userStatus" />
+    </resultMap>
+
+    <!-- 获取问题列表，带标签和用户提交信息 -->
+    <select id="getProblemList" resultMap="ProblemVOResultMap">
+        SELECT
+        p.*,
+        CASE
+        WHEN s.id IS NOT NULL AND s.status = 1 THEN 1 -- 已通过
+        WHEN s.id IS NOT NULL THEN 2 -- 已尝试但未通过
+        ELSE 0 -- 未尝试
+        END as user_status
+        FROM
+        t_problem p
+        LEFT JOIN (
+        SELECT problem_id, status, MAX(id) as id
+        FROM t_submission
+        WHERE user_id = #{userId}
+        GROUP BY problem_id, status
+        ) s ON p.id = s.problem_id
+        <where>
+            p.is_deleted = 0
+            <if test="status != null">
+                AND p.status = #{status}
+            </if>
+            <if test="difficulty != null">
+                AND p.difficulty = #{difficulty}
+            </if>
+            <if test="keyword != null and keyword != ''">
+                AND (
+                p.title LIKE CONCAT('%', #{keyword}, '%')
+                OR p.problem_no LIKE CONCAT('%', #{keyword}, '%')
+                )
+            </if>
+            <if test="tagIds != null and tagIds.size() > 0">
+                AND p.id IN (
+                SELECT DISTINCT problem_id
+                FROM t_problem_tag_relation
+                WHERE tag_id IN
+                <foreach collection="tagIds" item="tagId" open="(" separator="," close=")">
+                    #{tagId}
+                </foreach>
+                )
+            </if>
+        </where>
+        ORDER BY p.problem_no
+    </select>
+
+    <!-- 通过题目编号查询题目 -->
+    <select id="getProblemByNo" resultMap="BaseResultMap">
+        SELECT *
+        FROM t_problem
+        WHERE problem_no = #{problemNo}
+          AND is_deleted = 0
+            LIMIT 1
+    </select>
+
+    <!-- 更新题目提交数 -->
+    <update id="incrementSubmitCount">
+        UPDATE t_problem
+        SET submit_count = submit_count + 1
+        WHERE id = #{problemId}
+    </update>
+
+    <!-- 更新题目通过数 -->
+    <update id="incrementAcceptedCount">
+        UPDATE t_problem
+        SET accepted_count = accepted_count + 1
+        WHERE id = #{problemId}
+    </update>
+</mapper>

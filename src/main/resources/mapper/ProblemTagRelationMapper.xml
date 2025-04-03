@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zephyr.croj.mapper.ProblemTagRelationMapper">
+
+    <!-- 通用查询映射结果 -->
+    <resultMap id="BaseResultMap" type="com.zephyr.croj.model.entity.ProblemTagRelation">
+        <id column="id" property="id" />
+        <result column="problem_id" property="problemId" />
+        <result column="tag_id" property="tagId" />
+        <result column="create_time" property="createTime" />
+        <result column="update_time" property="updateTime" />
+    </resultMap>
+
+    <!-- 批量插入题目标签关联 -->
+    <insert id="batchInsert">
+        INSERT INTO t_problem_tag_relation (problem_id, tag_id, create_time, update_time)
+        VALUES
+        <foreach collection="tagIds" item="tagId" separator=",">
+            (#{problemId}, #{tagId}, NOW(), NOW())
+        </foreach>
+    </insert>
+
+    <!-- 删除题目的所有标签关联 -->
+    <delete id="deleteByProblemId">
+        DELETE FROM t_problem_tag_relation
+        WHERE problem_id = #{problemId}
+    </delete>
+
+    <!-- 获取使用了指定标签的题目数量 -->
+    <select id="countProblemsByTagId" resultType="int">
+        SELECT COUNT(DISTINCT problem_id)
+        FROM t_problem_tag_relation
+        WHERE tag_id = #{tagId}
+    </select>
+</mapper>

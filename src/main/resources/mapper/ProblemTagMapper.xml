@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zephyr.croj.mapper.ProblemTagMapper">
+
+    <!-- 通用查询映射结果 -->
+    <resultMap id="BaseResultMap" type="com.zephyr.croj.model.entity.ProblemTag">
+        <id column="id" property="id" />
+        <result column="name" property="name" />
+        <result column="color" property="color" />
+        <result column="create_user_id" property="createUserId" />
+        <result column="create_time" property="createTime" />
+        <result column="update_time" property="updateTime" />
+        <result column="is_deleted" property="isDeleted" />
+    </resultMap>
+
+    <!-- 查询题目关联的标签列表 -->
+    <select id="getTagsByProblemId" resultMap="BaseResultMap">
+        SELECT t.*
+        FROM t_problem_tag t
+                 INNER JOIN t_problem_tag_relation r ON t.id = r.tag_id
+        WHERE r.problem_id = #{problemId}
+          AND t.is_deleted = 0
+        ORDER BY t.id
+    </select>
+
+    <!-- 批量查询题目关联的标签 -->
+    <select id="getTagsByProblemIds" resultType="com.zephyr.croj.model.entity.ProblemTag">
+        SELECT t.*, r.problem_id
+        FROM t_problem_tag t
+        INNER JOIN t_problem_tag_relation r ON t.id = r.tag_id
+        WHERE r.problem_id IN
+        <foreach collection="problemIds" item="problemId" open="(" separator="," close=")">
+            #{problemId}
+        </foreach>
+        AND t.is_deleted = 0
+        ORDER BY t.id
+    </select>
+</mapper>

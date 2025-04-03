@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zephyr.croj.mapper.SubmissionMapper">
+
+    <!-- 通用查询映射结果 -->
+    <resultMap id="BaseResultMap" type="com.zephyr.croj.model.entity.Submission">
+        <id column="id" property="id" />
+        <result column="problem_id" property="problemId" />
+        <result column="user_id" property="userId" />
+        <result column="language" property="language" />
+        <result column="code" property="code" />
+        <result column="status" property="status" />
+        <result column="run_time" property="runTime" />
+        <result column="memory" property="memory" />
+        <result column="judge_info" property="judgeInfo" />
+        <result column="score" property="score" />
+        <result column="error_message" property="errorMessage" />
+        <result column="create_time" property="createTime" />
+        <result column="update_time" property="updateTime" />
+        <result column="is_deleted" property="isDeleted" />
+    </resultMap>
+
+    <!-- 提交详情VO结果映射 -->
+    <resultMap id="SubmissionVOResultMap" type="com.zephyr.croj.model.vo.SubmissionVO" extends="BaseResultMap">
+        <result column="problem_no" property="problemNo" />
+        <result column="problem_title" property="problemTitle" />
+        <result column="username" property="username" />
+    </resultMap>
+
+    <!-- 获取用户在某题目的最佳提交 -->
+    <select id="getUserBestSubmission" resultMap="BaseResultMap">
+        SELECT *
+        FROM t_submission
+        WHERE user_id = #{userId}
+          AND problem_id = #{problemId}
+          AND status = 1
+          AND is_deleted = 0
+        ORDER BY run_time ASC, memory ASC
+            LIMIT 1
+    </select>
+
+    <!-- 获取用户题目通过状态 -->
+    <select id="getUserProblemStatus" resultType="java.lang.Integer">
+        SELECT
+            CASE
+                WHEN EXISTS (
+                    SELECT 1
+                    FROM t_submission
+                    WHERE user_id = #{userId}
+                      AND problem_id = #{problemId}
+                      AND status = 1
+                      AND is_deleted = 0
+                ) THEN 1
+                WHEN EXISTS (
+                    SELECT 1
+                    FROM t_submission
+                    WHERE user_id = #{userId}
+                      AND problem_id = #{problemId}
+                      AND status != 1
+                    AND is_deleted = 0
+                ) THEN 2
+                ELSE NULL
+                END
+    </select>
+
+    <!-- 查询提交详情列表 -->
+    <select id="getSubmissionList" resultMap="SubmissionVOResultMap">
+        SELECT
+        s.*,
+        p.problem_no,
+        p.title AS problem_title,
+        u.username
+        FROM
+        t_submission s
+        LEFT JOIN t_problem p ON s.problem_id = p.id
+        LEFT JOIN t_user u ON s.user_id = u.id
+        <where>
+            s.is_deleted = 0
+            <if test="userId != null">
+                AND s.user_id = #{userId}
+            </if>
+            <if test="problemId != null">
+                AND s.problem_id = #{problemId}
+            </if>
+            <if test="language != null and language != ''">
+                AND s.language = #{language}
+            </if>
+            <if test="status != null">
+                AND s.status = #{status}
+            </if>
+        </where>
+        ORDER BY s.id DESC
+    </select>
+
+    <!-- 获取用户的提交统计 -->
+    <select id="countUserSubmissions" resultType="int">
+        SELECT COUNT(*)
+        FROM t_submission
+        WHERE user_id = #{userId}
+          AND is_deleted = 0
+    </select>
+
+    <!-- 获取用户的通过题目数 -->
+    <select id="countUserAcceptedProblems" resultType="int">
+        SELECT COUNT(DISTINCT problem_id)
+        FROM t_submission
+        WHERE user_id = #{userId}
+          AND status = 1
+          AND is_deleted = 0
+    </select>
+
+</mapper>

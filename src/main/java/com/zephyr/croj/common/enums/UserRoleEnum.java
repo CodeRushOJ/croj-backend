@@ -1,11 +1,13 @@
 package com.zephyr.croj.common.enums;
 
+import lombok.AllArgsConstructor;
 import lombok.Getter;
 
 /**
  * 用户角色枚举
  */
 @Getter
+@AllArgsConstructor
 public enum UserRoleEnum {
 
     /**
@@ -32,11 +34,6 @@ public enum UserRoleEnum {
      * 角色描述
      */
     private final String desc;
-
-    UserRoleEnum(Integer code, String desc) {
-        this.code = code;
-        this.desc = desc;
-    }
 
     /**
      * 根据code获取枚举

@@ -101,7 +101,22 @@ public enum ResultCodeEnum {
     /**
      * 上传失败
      */
-    UPLOAD_ERROR(40013, "上传失败");
+    UPLOAD_ERROR(40013, "上传失败"),
+
+    /**
+     * 题目不存在
+     */
+    PROBLEM_NOT_EXIST(40014, "题目不存在"),
+
+    /**
+     * 删除失败
+     */
+    DELETE_ERROR(40015, "删除失败"),
+
+    /**
+     * 删除失败
+     */
+    CREATE_ERROR(40015, "创建失败");
 
     /**
      * 状态码

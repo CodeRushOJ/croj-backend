@@ -93,7 +93,7 @@ public class SecurityConfig {
                 .and()
                 // 请求授权规则
                 .authorizeRequests()
-                // 允许所有人访问公共资源
+                // 允许所有人访问公共资源 (Swagger)
                 .antMatchers(
                         "/swagger-ui.html",
                         "/swagger-ui/**",
@@ -108,7 +108,7 @@ public class SecurityConfig {
                 ).permitAll()
                 // 允许所有人访问上传的文件资源
                 .antMatchers("/uploads/**").permitAll()
-                // 允许所有人访问登录和注册接口
+                // 允许所有人访问公开API
                 .antMatchers(
                         "/user/register",
                         "/user/login",
@@ -119,20 +119,8 @@ public class SecurityConfig {
                 ).permitAll()
                 // OPTIONS 请求放行
                 .antMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                // 管理员接口权限
-                .antMatchers(HttpMethod.POST, "/problem/**").hasAnyRole("ADMIN", "SUPER_ADMIN")
-                .antMatchers(HttpMethod.PUT, "/problem/**").hasAnyRole("ADMIN", "SUPER_ADMIN")
-                .antMatchers(HttpMethod.DELETE, "/problem/**").hasAnyRole("ADMIN", "SUPER_ADMIN")
-                .antMatchers(HttpMethod.POST, "/problem/tag/**").hasAnyRole("ADMIN", "SUPER_ADMIN")
-                .antMatchers(HttpMethod.PUT, "/problem/tag/**").hasAnyRole("ADMIN", "SUPER_ADMIN")
-                .antMatchers(HttpMethod.DELETE, "/problem/tag/**").hasAnyRole("ADMIN", "SUPER_ADMIN")
-                .antMatchers("/user/list").hasAnyRole("ADMIN", "SUPER_ADMIN")
-                .antMatchers("/user/status/**").hasAnyRole("ADMIN", "SUPER_ADMIN")
-                .antMatchers("/admin/**").hasAnyRole("ADMIN", "SUPER_ADMIN")
-                .antMatchers("/problem").hasAnyRole("ADMIN", "SUPER_ADMIN")
-                .antMatchers("/problem/tag").hasAnyRole("ADMIN", "SUPER_ADMIN")
-                .antMatchers(HttpMethod.DELETE, "/user/**").hasAnyRole("ADMIN", "SUPER_ADMIN")
                 // 其他所有请求需要认证
+                // 具体的角色权限控制交给 @PreAuthorize 注解
                 .anyRequest().authenticated();
 
         // 添加JWT过滤器

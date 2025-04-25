@@ -1,5 +1,5 @@
 server:
-  port: 8080
+  port: 7999
   servlet:
     context-path: /api
 spring:
@@ -114,3 +114,11 @@ app:
       # URL path where avatars can be accessed
       url-path: /uploads/avatar
   frontend-url: http://localhost:3000
+
+# RocketMQ config
+rocketmq:
+  name-server: 127.0.0.1:9876
+  producer:
+    group: submission-producer-group
+  consumer:
+    group: submission-consumer-group

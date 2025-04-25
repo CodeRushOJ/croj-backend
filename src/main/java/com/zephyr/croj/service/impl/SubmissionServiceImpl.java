@@ -18,6 +18,7 @@ import com.zephyr.croj.service.SubmissionService;
 import com.zephyr.croj.service.UserService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.rocketmq.spring.core.RocketMQTemplate;
 import org.springframework.beans.BeanUtils;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
@@ -37,6 +38,7 @@ public class SubmissionServiceImpl extends ServiceImpl<SubmissionMapper, Submiss
     private final UserService userService;
     private final ProblemService problemService;
     private final Random random = new Random();
+    private final RocketMQTemplate rocketMQTemplate;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -75,8 +77,17 @@ public class SubmissionServiceImpl extends ServiceImpl<SubmissionMapper, Submiss
         // 更新题目提交数
         problemService.incrementSubmitCount(dto.getProblemId());
 
-        // 模拟判题（异步执行）
-        mockJudge(submission.getId());
+        // 发送消息到 RocketMQ
+        log.info("准备发送 RocketMQ 消息，submissionId: {}", submission.getId());
+        try {
+            rocketMQTemplate.convertAndSend("submission-topic", submission.getId());
+            log.info("RocketMQ 消息发送成功，submissionId: {}", submission.getId());
+        } catch (Exception e) {
+            log.error("发送 RocketMQ 消息失败，submissionId: {}", submission.getId(), e);
+            // 这里可以根据业务需求决定是否需要回滚事务或进行其他补偿操作
+            // 例如，可以抛出异常让 @Transactional 回滚
+             throw new BusinessException(ResultCodeEnum.SYSTEM_ERROR);
+        }
 
         return submission.getId();
     }
@@ -183,90 +194,6 @@ public class SubmissionServiceImpl extends ServiceImpl<SubmissionMapper, Submiss
     @Override
     @Async
     public void mockJudge(Long submissionId) {
-        try {
-            // 模拟判题延迟
-            TimeUnit.SECONDS.sleep(1 + random.nextInt(3));
-
-            // 获取提交记录
-            Submission submission = getById(submissionId);
-            if (submission == null) {
-                return;
-            }
-
-            // 获取题目信息
-            Problem problem = problemService.getById(submission.getProblemId());
-            if (problem == null) {
-                return;
-            }
-
-            // 随机生成判题结果
-            int[] possibleStatus = {
-                    SubmissionStatusEnum.ACCEPTED.getCode(),
-                    SubmissionStatusEnum.COMPILE_ERROR.getCode(),
-                    SubmissionStatusEnum.WRONG_ANSWER.getCode(),
-                    SubmissionStatusEnum.TIME_LIMIT_EXCEEDED.getCode(),
-                    SubmissionStatusEnum.MEMORY_LIMIT_EXCEEDED.getCode(),
-                    SubmissionStatusEnum.RUNTIME_ERROR.getCode()
-            };
-
-            int statusIndex = random.nextInt(possibleStatus.length);
-            // 提高AC率
-            if (random.nextInt(100) < 70) {
-                statusIndex = 0; // 70%的概率AC
-            }
-
-            int status = possibleStatus[statusIndex];
-
-            // 设置判题结果
-            submission.setStatus(status);
-
-            // 如果通过，设置运行时间和内存
-            if (status == SubmissionStatusEnum.ACCEPTED.getCode()) {
-                submission.setRunTime(random.nextInt(problem.getTimeLimit()));
-                submission.setMemory(random.nextInt(problem.getMemoryLimit() * 1024));
-
-                // 更新题目通过数
-                problemService.incrementAcceptedCount(problem.getId());
-            } else {
-                // 设置错误信息
-                switch (status) {
-                    case 2: // COMPILE_ERROR
-                        submission.setErrorMessage("编译错误: 找不到符号 'solution'");
-                        break;
-                    case 3: // WRONG_ANSWER
-                        submission.setErrorMessage("答案错误: 在测试点 2 上失败");
-                        break;
-                    case 4: // TIME_LIMIT_EXCEEDED
-                        submission.setRunTime(problem.getTimeLimit() + random.nextInt(500));
-                        submission.setErrorMessage("运行超时: 程序执行时间超过限制");
-                        break;
-                    case 5: // MEMORY_LIMIT_EXCEEDED
-                        submission.setMemory(problem.getMemoryLimit() * 1024 + random.nextInt(1024));
-                        submission.setErrorMessage("内存超限: 程序使用内存超过限制");
-                        break;
-                    case 6: // RUNTIME_ERROR
-                        submission.setErrorMessage("运行错误: 除以零错误");
-                        break;
-                }
-            }
-
-            // OI模式下设置得分
-            if (problem.getJudgeMode() == 1) { // OI模式
-                if (status == SubmissionStatusEnum.ACCEPTED.getCode()) {
-                    submission.setScore(problem.getTotalScore());
-                } else if (status != SubmissionStatusEnum.COMPILE_ERROR.getCode()) {
-                    // 编译错误得0分，其他错误随机得分
-                    submission.setScore(random.nextInt(problem.getTotalScore()));
-                } else {
-                    submission.setScore(0);
-                }
-            }
-
-            // 更新提交记录
-            updateById(submission);
-
-        } catch (Exception e) {
-            log.error("模拟判题失败", e);
-        }
+        // ... existing code ...
     }
 }

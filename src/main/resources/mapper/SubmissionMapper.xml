@@ -66,12 +66,23 @@
     <!-- 查询提交详情列表 -->
     <select id="getSubmissionList" resultMap="SubmissionVOResultMap">
         SELECT
-        s.*,
-        p.problem_no,
-        p.title AS problem_title,
-        u.username
+            s.id,
+            s.problem_id,
+            s.user_id,
+            s.language,
+            s.code,
+            s.status,
+            s.run_time,
+            s.memory,
+            s.judge_info,
+            s.score,
+            s.error_message,
+            s.create_time,
+            p.problem_no,
+            p.title AS problem_title,
+            u.username
         FROM
-        t_submission s
+            t_submission s
         LEFT JOIN t_problem p ON s.problem_id = p.id
         LEFT JOIN t_user u ON s.user_id = u.id
         <where>

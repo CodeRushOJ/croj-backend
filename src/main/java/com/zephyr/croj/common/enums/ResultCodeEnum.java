@@ -114,9 +114,14 @@ public enum ResultCodeEnum {
     DELETE_ERROR(40015, "删除失败"),
 
     /**
-     * 删除失败
+     * 创建失败
      */
-    CREATE_ERROR(40015, "创建失败");
+    CREATE_ERROR(40016, "创建失败"),
+
+    /**
+     * 系统错误
+     */
+    SYSTEM_ERROR(40017, "系统错误");
 
     /**
      * 状态码

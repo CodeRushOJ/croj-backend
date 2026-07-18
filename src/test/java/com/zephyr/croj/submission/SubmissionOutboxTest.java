@@ -11,7 +11,9 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.zephyr.croj.model.dto.SubmissionDTO;
+import com.zephyr.croj.mapper.JudgeAttemptMapper;
 import com.zephyr.croj.model.entity.Problem;
+import com.zephyr.croj.model.entity.JudgeAttempt;
 import com.zephyr.croj.model.entity.Submission;
 import com.zephyr.croj.model.entity.User;
 import com.zephyr.croj.outbox.SubmissionOutbox;
@@ -27,8 +29,10 @@ class SubmissionOutboxTest {
         UserService users = mock(UserService.class);
         ProblemService problems = mock(ProblemService.class);
         SubmissionOutbox outbox = mock(SubmissionOutbox.class);
+        JudgeAttemptMapper attempts = mock(JudgeAttemptMapper.class);
+        when(attempts.insert(any(JudgeAttempt.class))).thenReturn(1);
         SubmissionServiceImpl service = org.mockito.Mockito.spy(
-                new SubmissionServiceImpl(users, problems, outbox));
+                new SubmissionServiceImpl(users, problems, outbox, attempts));
 
         User user = new User();
         user.setId(7L);
@@ -59,8 +63,9 @@ class SubmissionOutboxTest {
         UserService users = mock(UserService.class);
         ProblemService problems = mock(ProblemService.class);
         SubmissionOutbox outbox = mock(SubmissionOutbox.class);
+        JudgeAttemptMapper attempts = mock(JudgeAttemptMapper.class);
         SubmissionServiceImpl service = org.mockito.Mockito.spy(
-                new SubmissionServiceImpl(users, problems, outbox));
+                new SubmissionServiceImpl(users, problems, outbox, attempts));
         User user = new User();
         Problem problem = new Problem();
         problem.setStatus(0);

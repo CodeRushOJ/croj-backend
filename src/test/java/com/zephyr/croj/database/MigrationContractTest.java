@@ -16,6 +16,8 @@ class MigrationContractTest {
             "src", "main", "resources", "db", "migration", "V2__add_outbox_claims.sql");
     private static final Path COMMUNITY_CONTENT = Path.of(
             "src", "main", "resources", "db", "migration", "V3__community_content_api.sql");
+    private static final Path JUDGE_RESULTS = Path.of(
+            "src", "main", "resources", "db", "migration", "V4__judge_result_ingestion.sql");
 
     @Test
     void cleanSchemaCoversTheCompleteFreeOjDomain() throws IOException {
@@ -60,5 +62,15 @@ class MigrationContractTest {
         assertTrue(sql.contains("insert into `t_problem_version`"));
         assertTrue(sql.contains("update `t_problem`"));
         assertTrue(sql.contains("`published_version_id`"));
+    }
+
+    @Test
+    void judgeResultReceiptsUseAForwardOnlyMigration() throws IOException {
+        assertTrue(Files.isRegularFile(JUDGE_RESULTS));
+        String sql = Files.readString(JUDGE_RESULTS).toLowerCase();
+        assertTrue(sql.contains("create table `t_judge_result_receipt`"));
+        assertTrue(sql.contains("`result_id`"));
+        assertTrue(sql.contains("`payload_sha256`"));
+        assertTrue(sql.contains("insert into `t_judge_attempt`"));
     }
 }

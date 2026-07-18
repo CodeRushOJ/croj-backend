@@ -39,7 +39,7 @@ public class OutboxPublisher {
             try {
                 SendResult result = rocketMq.syncSend(
                         properties.getSubmissionTopic(),
-                        String.valueOf(event.getAggregateId()),
+                        event.getPayload(),
                         properties.getPublishTimeout().toMillis());
                 if (result == null || result.getSendStatus() != SendStatus.SEND_OK) {
                     throw new IllegalStateException("RocketMQ send status: "

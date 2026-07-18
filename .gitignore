@@ -1,5 +1,6 @@
 HELP.md
 target/
+.m2/
 .env
 .env.*
 !.env.example

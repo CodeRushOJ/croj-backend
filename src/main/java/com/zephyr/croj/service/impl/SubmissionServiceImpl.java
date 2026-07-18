@@ -7,10 +7,12 @@ import com.zephyr.croj.common.enums.ResultCodeEnum;
 import com.zephyr.croj.common.enums.SubmissionStatusEnum;
 import com.zephyr.croj.common.exception.BusinessException;
 import com.zephyr.croj.mapper.SubmissionMapper;
+import com.zephyr.croj.mapper.JudgeAttemptMapper;
 import com.zephyr.croj.model.dto.SubmissionDTO;
 import com.zephyr.croj.model.dto.SubmissionQueryDTO;
 import com.zephyr.croj.model.entity.Problem;
 import com.zephyr.croj.model.entity.Submission;
+import com.zephyr.croj.model.entity.JudgeAttempt;
 import com.zephyr.croj.model.entity.User;
 import com.zephyr.croj.model.vo.SubmissionVO;
 import com.zephyr.croj.outbox.SubmissionOutbox;
@@ -33,6 +35,7 @@ public class SubmissionServiceImpl extends ServiceImpl<SubmissionMapper, Submiss
     private final UserService userService;
     private final ProblemService problemService;
     private final SubmissionOutbox submissionOutbox;
+    private final JudgeAttemptMapper judgeAttempts;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -71,6 +74,14 @@ public class SubmissionServiceImpl extends ServiceImpl<SubmissionMapper, Submiss
         // 更新题目提交数
         if (!problemService.incrementSubmitCount(dto.getProblemId())) {
             throw new BusinessException(ResultCodeEnum.UPDATE_ERROR);
+        }
+
+        JudgeAttempt attempt = new JudgeAttempt();
+        attempt.setSubmissionId(submission.getId());
+        attempt.setAttemptNo(1);
+        attempt.setStatus("QUEUED");
+        if (judgeAttempts.insert(attempt) != 1) {
+            throw new BusinessException(ResultCodeEnum.CREATE_ERROR);
         }
 
         // 与提交记录处于同一数据库事务；消息由独立发布器可靠投递。

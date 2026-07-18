@@ -4,6 +4,7 @@ import com.zephyr.croj.common.enums.ResultCodeEnum;
 import com.zephyr.croj.common.response.Result;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.validation.BindException;
 import org.springframework.validation.BindingResult;
 import org.springframework.validation.FieldError;
@@ -22,6 +23,13 @@ import java.util.Set;
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    @ExceptionHandler(JudgeResultConflictException.class)
+    public ResponseEntity<Result<Void>> handleJudgeResultConflict(JudgeResultConflictException exception) {
+        log.warn("判题结果冲突: {}", exception.getMessage());
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(Result.error(40900, exception.getMessage()));
+    }
 
     /**
      * 处理自定义业务异常

@@ -377,8 +377,8 @@ public class ContestRepository {
                 Timestamp.from(cutoffExclusive));
     }
 
-    public String submissionSourceVersion(long contestId, Instant cutoffExclusive) {
-        return jdbc.queryForObject(
+    public String scoreboardSourceVersion(long contestId, Instant cutoffExclusive) {
+        String submissions = jdbc.queryForObject(
                 """
                 SELECT COUNT(*) AS row_count,MAX(update_time) AS max_updated_at,
                        COALESCE(SUM(id*17+status*31),0) AS status_checksum
@@ -392,6 +392,21 @@ public class ContestRepository {
                 },
                 contestId,
                 Timestamp.from(cutoffExclusive));
+        String registrations = jdbc.queryForObject(
+                """
+                SELECT COUNT(*) AS row_count,MAX(updated_at) AS max_updated_at,
+                       COALESCE(SUM(user_id*17 + CASE WHEN status='REGISTERED' THEN 31 ELSE 47 END),0)
+                         AS roster_checksum
+                FROM t_contest_registration WHERE contest_id=?
+                """,
+                (result, row) -> {
+                    Timestamp updatedAt = result.getTimestamp("max_updated_at");
+                    long updatedMillis = updatedAt == null ? 0L : updatedAt.toInstant().toEpochMilli();
+                    return result.getLong("row_count") + ":" + updatedMillis + ":"
+                            + result.getLong("roster_checksum");
+                },
+                contestId);
+        return submissions + ":r:" + registrations;
     }
 
     public Optional<String> findScoreboardSnapshot(

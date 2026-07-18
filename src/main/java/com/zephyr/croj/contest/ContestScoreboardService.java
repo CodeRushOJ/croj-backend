@@ -67,11 +67,7 @@ public class ContestScoreboardService {
         if (!"ACM".equalsIgnoreCase(contest.ruleType())) {
             throw ContestApiException.unprocessable("OI scoreboard is not implemented in Contest Core v1");
         }
-        var participants = contests.registeredUsers(contest.id());
-        var problems = contests.listProblems(contest.id()).stream()
-                .map(problem -> new AcmScoreboardCalculator.Problem(problem.problemId(), problem.label()))
-                .toList();
-        String sourceVersion = contests.submissionSourceVersion(contest.id(), cutoffExclusive);
+        String sourceVersion = contests.scoreboardSourceVersion(contest.id(), cutoffExclusive);
         if (cacheable) {
             var cached = readSnapshot(contest.id(), cutoffExclusive, sourceVersion);
             if (cached != null) {
@@ -79,6 +75,10 @@ public class ContestScoreboardService {
                         contest.id(), cutoffExclusive, frozen, sourceVersion, cached.rows());
             }
         }
+        var participants = contests.registeredUsers(contest.id());
+        var problems = contests.listProblems(contest.id()).stream()
+                .map(problem -> new AcmScoreboardCalculator.Problem(problem.problemId(), problem.label()))
+                .toList();
         var board = AcmScoreboardCalculator.calculate(
                 participants,
                 problems,

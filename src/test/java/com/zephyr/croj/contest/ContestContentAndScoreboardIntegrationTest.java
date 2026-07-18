@@ -81,9 +81,15 @@ class ContestContentAndScoreboardIntegrationTest {
         assertEquals(1, jdbc.queryForObject(
                 "SELECT COUNT(*) FROM t_contest_scoreboard_snapshot WHERE contest_id=1",
                 Integer.class));
+        jdbc.update("INSERT INTO t_contest_registration(contest_id,user_id,status) VALUES (1,9,'REGISTERED')");
+        var refreshedPublicBoard = scoreboards.publicScoreboard(1L, 7L);
+        assertEquals(3, refreshedPublicBoard.rows().size());
+        assertEquals(1, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM t_contest_scoreboard_snapshot WHERE contest_id=1",
+                Integer.class));
 
         var adminBoard = scoreboards.administratorScoreboard(1L);
-        assertEquals(2, adminBoard.rows().size());
+        assertEquals(3, adminBoard.rows().size());
         assertEquals(1, adminBoard.rows().get(1).solved());
     }
 

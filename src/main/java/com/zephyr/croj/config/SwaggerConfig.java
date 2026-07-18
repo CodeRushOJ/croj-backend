@@ -1,26 +1,24 @@
 package com.zephyr.croj.config;
 
+import com.zephyr.croj.config.properties.JwtProperties;
 import io.swagger.v3.oas.models.Components;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Contact;
 import io.swagger.v3.oas.models.info.Info;
 import io.swagger.v3.oas.models.security.SecurityRequirement;
 import io.swagger.v3.oas.models.security.SecurityScheme;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import lombok.RequiredArgsConstructor;
 
 /**
  * Swagger配置类
  */
 @Configuration
+@RequiredArgsConstructor
 public class SwaggerConfig {
 
-    @Value("${jwt.header:Authorization}")
-    private String authorizationHeader;
-
-    @Value("${jwt.tokenPrefix:Bearer}")
-    private String tokenPrefix;
+    private final JwtProperties jwtProperties;
 
     @Bean
     public OpenAPI customOpenAPI() {
@@ -40,7 +38,7 @@ public class SwaggerConfig {
 
     private SecurityScheme createSecurityScheme() {
         return new SecurityScheme()
-                .name(authorizationHeader)
+                .name(jwtProperties.header())
                 .type(SecurityScheme.Type.HTTP)
                 .scheme("bearer")
                 .bearerFormat("JWT")

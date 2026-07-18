@@ -1,10 +1,10 @@
 package com.zephyr.croj.security;
 
+import com.zephyr.croj.config.properties.JwtProperties;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
@@ -30,24 +30,18 @@ import java.util.stream.Collectors;
 @Slf4j
 public class JwtTokenProvider {
 
-    @Value("${jwt.secret}")
-    private String secretKeyString;
-
-    @Value("${jwt.expiration}")
-    private long tokenValidityInMilliseconds;
-
-    @Value("${jwt.header}")
-    private String authorizationHeader;
-
-    @Value("${jwt.tokenPrefix}")
-    private String tokenPrefix;
+    private final JwtProperties properties;
 
     private SecretKey secretKey;
+
+    public JwtTokenProvider(JwtProperties properties) {
+        this.properties = properties;
+    }
 
     @PostConstruct
     protected void init() {
         // 使用HMAC-SHA算法创建密钥
-        secretKey = Keys.hmacShaKeyFor(secretKeyString.getBytes(StandardCharsets.UTF_8));
+        secretKey = Keys.hmacShaKeyFor(properties.secret().getBytes(StandardCharsets.UTF_8));
     }
 
     /**
@@ -60,7 +54,7 @@ public class JwtTokenProvider {
      */
     public String createToken(Long userId, String username, List<String> roles) {
         Date now = new Date();
-        Date validity = new Date(now.getTime() + tokenValidityInMilliseconds);
+        Date validity = new Date(now.getTime() + properties.expiration().toMillis());
 
         // 确保角色以"ROLE_"开头
         List<String> formattedRoles = roles.stream()
@@ -115,9 +109,9 @@ public class JwtTokenProvider {
      * @return Token
      */
     public String resolveToken(HttpServletRequest request) {
-        String bearerToken = request.getHeader(authorizationHeader);
-        if (bearerToken != null && bearerToken.startsWith(tokenPrefix + " ")) {
-            return bearerToken.substring(tokenPrefix.length() + 1);
+        String bearerToken = request.getHeader(properties.header());
+        if (bearerToken != null && bearerToken.startsWith(properties.tokenPrefix() + " ")) {
+            return bearerToken.substring(properties.tokenPrefix().length() + 1);
         }
         return null;
     }

@@ -3,6 +3,7 @@ package com.zephyr.croj.controller;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.zephyr.croj.common.exception.BusinessException;
 import com.zephyr.croj.common.response.Result;
+import com.zephyr.croj.config.properties.JwtProperties;
 import com.zephyr.croj.model.dto.UserLoginDTO;
 import com.zephyr.croj.model.dto.UserRegisterDTO;
 import com.zephyr.croj.model.dto.UserUpdateDTO;
@@ -16,7 +17,6 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
@@ -40,12 +40,7 @@ public class UserController {
 
     private final UserService userService;
     private final HttpServletRequest request;
-
-    @Value("${jwt.expiration}")
-    private long tokenExpiration;
-
-    @Value("${jwt.tokenPrefix}")
-    private String tokenPrefix;
+    private final JwtProperties jwtProperties;
 
     /**
      * 用户注册
@@ -69,8 +64,8 @@ public class UserController {
         // 构建返回结果
         LoginResponseVO loginResponse = LoginResponseVO.builder()
                 .token(token)
-                .tokenType(tokenPrefix)
-                .expiresIn(tokenExpiration) // 24小时，应与JWT配置保持一致
+                .tokenType(jwtProperties.tokenPrefix())
+                .expiresIn(jwtProperties.expiration().toMillis())
                 .build();
 
         return Result.success("登录成功", loginResponse);

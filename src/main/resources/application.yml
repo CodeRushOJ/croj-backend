@@ -76,7 +76,7 @@ logging:
 # JWT配置
 jwt:
   secret: ${JWT_SECRET}
-  expiration: 86400000  # 24小时
+  expiration: 24h
   header: Authorization
   tokenPrefix: Bearer
 
@@ -102,6 +102,10 @@ springdoc:
 
 # File storage configuration
 app:
+  security:
+    cors:
+      allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
+      allow-credentials: true
   upload:
     # Base directory for file uploads (absolute path)
     base-dir: ${FILE_UPLOAD_DIR:uploads}

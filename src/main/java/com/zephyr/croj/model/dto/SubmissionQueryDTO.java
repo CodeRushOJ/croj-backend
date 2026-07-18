@@ -2,8 +2,8 @@ package com.zephyr.croj.model.dto;
 
 import lombok.Data;
 
-import javax.validation.constraints.Max;
-import javax.validation.constraints.Min;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import java.io.Serial;
 import java.io.Serializable;
 

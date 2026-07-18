@@ -10,19 +10,19 @@ spring:
     url: ${DATABASE_URL:jdbc:mysql://localhost:3306/code_rush_oj?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false}
     username: ${DATABASE_USERNAME:coderushoj}
     password: ${DATABASE_PASSWORD}
-  # Redis配置
-  redis:
-    host: localhost
-    port: 6379
-    password: ${REDIS_PASSWORD}
-    database: 0
-    timeout: 10000
-    lettuce:
-      pool:
-        max-active: 8
-        max-wait: -1
-        max-idle: 8
-        min-idle: 0
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD}
+      database: 0
+      timeout: 10s
+      lettuce:
+        pool:
+          max-active: 8
+          max-wait: -1ms
+          max-idle: 8
+          min-idle: 0
   jackson:
     date-format: yyyy-MM-dd HH:mm:ss
     time-zone: GMT+8
@@ -121,3 +121,14 @@ rocketmq:
     group: submission-producer-group
   consumer:
     group: submission-consumer-group
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never

@@ -1,0 +1,7 @@
+server:
+  shutdown: graceful
+
+logging:
+  level:
+    com.zephyr.croj: info
+    org.springframework: warn

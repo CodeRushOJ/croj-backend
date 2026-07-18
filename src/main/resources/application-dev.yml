@@ -1,20 +1,3 @@
-spring:
-  mail:
-    host: smtp.163.com
-    port: 465
-    protocol: smtp
-    default-encoding: UTF-8
-    username: hezhifei2001@163.com
-    password: EDbXji38eXN7hn5t
-    properties:
-      mail:
-        smtp:
-          auth: true
-          starttls:
-            enable: true
-            required: true
-          ssl:
-            enable: true
-          socketFactory:
-            port: 465
-            class: javax.net.ssl.SSLSocketFactory
+logging:
+  level:
+    com.zephyr.croj: debug

@@ -5,17 +5,16 @@ server:
 spring:
   application:
     name: coderush-oj
-  profiles:
-    active: dev
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://localhost:3306/code_rush_oj?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false
-    username: admin
-    password: admin123
+    url: ${DATABASE_URL:jdbc:mysql://localhost:3306/code_rush_oj?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false}
+    username: ${DATABASE_USERNAME:coderushoj}
+    password: ${DATABASE_PASSWORD}
   # Redis配置
   redis:
     host: localhost
     port: 6379
+    password: ${REDIS_PASSWORD}
     database: 0
     timeout: 10000
     lettuce:
@@ -30,12 +29,12 @@ spring:
     serialization:
       write-dates-as-timestamps: false
   mail:
-    host: smtp.163.com
-    port: 465
+    host: ${SMTP_HOST:localhost}
+    port: ${SMTP_PORT:1025}
     protocol: smtp
     default-encoding: UTF-8
-    username: your username
-    password: your password
+    username: ${SMTP_USERNAME:}
+    password: ${SMTP_PASSWORD}
     properties:
       mail:
         smtp:
@@ -76,7 +75,7 @@ logging:
 
 # JWT配置
 jwt:
-  secret: ${JWT_SECRET:coderushojsecretkey123456789987654321}
+  secret: ${JWT_SECRET}
   expiration: 86400000  # 24小时
   header: Authorization
   tokenPrefix: Bearer
@@ -117,7 +116,7 @@ app:
 
 # RocketMQ config
 rocketmq:
-  name-server: 127.0.0.1:9876
+  name-server: ${ROCKETMQ_NAME_SERVER:127.0.0.1:9876}
   producer:
     group: submission-producer-group
   consumer:

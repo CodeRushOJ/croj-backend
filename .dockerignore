@@ -1,0 +1,24 @@
+# The build context is allow-listed below. Explicit exclusions remain visible so
+# repository contract tests and human reviewers can audit the secret boundary.
+**
+.git/
+.github/
+.m2/
+.env
+.env.*
+target/
+uploads/
+docs/
+tests/
+README.md
+CHANGELOG.md
+
+!pom.xml
+!mvnw
+!.mvn/
+!.mvn/wrapper/
+!.mvn/wrapper/maven-wrapper.jar
+!.mvn/wrapper/maven-wrapper.properties
+!src/
+!src/main/
+!src/main/**

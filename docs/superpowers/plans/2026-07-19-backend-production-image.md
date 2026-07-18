@@ -6,7 +6,7 @@
 
 **Architecture:** A Maven/JDK builder uses dependency-first layers and a BuildKit cache; a Distroless Java 17 runtime contains only the Spring Boot JAR and a tiny localhost-only Java Actuator checker. Kubernetes owns read-only-root enforcement and writable `/tmp` and `/app/uploads` mounts, while repository tests inspect both Docker metadata and the exported filesystem without executing the application.
 
-**Tech Stack:** Docker BuildKit/Buildx, Maven 3.9, Eclipse Temurin JDK 17, Distroless Java 17 Debian 12 nonroot, Bash, GitHub Actions, Syft, Trivy.
+**Tech Stack:** Docker BuildKit/Buildx, Maven 3.9, Eclipse Temurin JDK 17, Distroless Java 17 Debian 13 nonroot, Bash, GitHub Actions, Syft, Trivy.
 
 ---
 
@@ -26,7 +26,7 @@
 
 **Files:**
 - Create: `Dockerfile`
-- Create: `src/container/java/com/coderushoj/container/ActuatorHealthCheck.java`
+- Create: `src/main/java/com/coderushoj/container/ActuatorHealthCheck.java`
 - Create: `src/test/java/com/zephyr/croj/container/ActuatorHealthCheckContractTest.java`
 
 - [ ] Write failing Java contract tests for fixed localhost URL, strict connect/read timeouts, no redirect, 2xx-only success, and response-body-free output behavior.

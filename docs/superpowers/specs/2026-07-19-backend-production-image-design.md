@@ -11,7 +11,7 @@
 Dockerfile 使用两个阶段：
 
 - builder 使用按 OCI index digest 固定的 Maven 3.9 + Eclipse Temurin JDK 17 镜像。先只复制 Maven wrapper 与 POM，通过 BuildKit cache mount 执行依赖预取，再复制源码并运行 Maven package；缓存不进入最终 layer。
-- runtime 使用按 OCI index digest 固定的 Distroless Java 17 Debian 12 `nonroot` 镜像。最终镜像只复制可执行 Spring Boot JAR 和独立健康检查 class，不包含源码、Maven、JDK 编译器、包管理器或 shell。
+- runtime 使用按 OCI index digest 固定的 Distroless Java 17 Debian 13 `nonroot` 镜像。Debian 13 是 Distroless 当前支持 Java 17 的发行线；最终镜像只复制可执行 Spring Boot JAR 和独立健康检查 class，不包含源码、Maven、JDK 编译器、包管理器或 shell。
 
 两个基础镜像的 tag、index digest、上游 registry 与核验命令记录在 Dockerfile OCI annotation、README 和 CI 中。选择 multi-platform index digest，使同一个 Dockerfile 可在 `linux/amd64` 与 `linux/arm64` 解析到对应 manifest；CI 至少构建和检查其运行平台镜像，并通过 Buildx 输出 provenance 与 SBOM。
 

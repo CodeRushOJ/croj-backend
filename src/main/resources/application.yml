@@ -102,6 +102,13 @@ springdoc:
 
 # File storage configuration
 app:
+  outbox:
+    enabled: ${OUTBOX_ENABLED:true}
+    submission-topic: ${SUBMISSION_TOPIC:submission-topic}
+    batch-size: ${OUTBOX_BATCH_SIZE:50}
+    poll-interval: ${OUTBOX_POLL_INTERVAL:PT1S}
+    claim-timeout: ${OUTBOX_CLAIM_TIMEOUT:PT30S}
+    publish-timeout: ${OUTBOX_PUBLISH_TIMEOUT:PT5S}
   security:
     cors:
       allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}

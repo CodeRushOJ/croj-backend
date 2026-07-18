@@ -12,6 +12,8 @@ class MigrationContractTest {
 
     private static final Path MIGRATION = Path.of(
             "src", "main", "resources", "db", "migration", "V1__oj_schema.sql");
+    private static final Path OUTBOX_CLAIMS = Path.of(
+            "src", "main", "resources", "db", "migration", "V2__add_outbox_claims.sql");
 
     @Test
     void cleanSchemaCoversTheCompleteFreeOjDomain() throws IOException {
@@ -25,6 +27,7 @@ class MigrationContractTest {
         }) {
             assertTrue(sql.contains("create table `" + table + "`"), "missing table " + table);
         }
+        assertFalse(sql.contains("`claimed_by`"), "published V1 migrations must remain immutable");
         assertFalse(sql.contains("create database"));
         assertFalse(sql.matches("(?s).*\\nuse\\s+.*"));
     }
@@ -33,5 +36,14 @@ class MigrationContractTest {
     void developmentSeedIsSeparatedFromProductionMigrations() {
         Path seed = Path.of("src", "main", "resources", "db", "dev", "R__development_seed.sql");
         assertTrue(Files.isRegularFile(seed));
+    }
+
+    @Test
+    void outboxClaimsAreAddedByAForwardOnlyMigration() throws IOException {
+        assertTrue(Files.isRegularFile(OUTBOX_CLAIMS));
+        String sql = Files.readString(OUTBOX_CLAIMS).toLowerCase();
+        assertTrue(sql.contains("`claimed_by`"));
+        assertTrue(sql.contains("`claimed_at`"));
+        assertTrue(sql.contains("alter table `t_outbox_event`"));
     }
 }

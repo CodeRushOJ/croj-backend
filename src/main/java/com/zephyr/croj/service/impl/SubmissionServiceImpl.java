@@ -13,32 +13,26 @@ import com.zephyr.croj.model.entity.Problem;
 import com.zephyr.croj.model.entity.Submission;
 import com.zephyr.croj.model.entity.User;
 import com.zephyr.croj.model.vo.SubmissionVO;
+import com.zephyr.croj.outbox.SubmissionOutbox;
 import com.zephyr.croj.service.ProblemService;
 import com.zephyr.croj.service.SubmissionService;
 import com.zephyr.croj.service.UserService;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.apache.rocketmq.spring.core.RocketMQTemplate;
 import org.springframework.beans.BeanUtils;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.util.Random;
-import java.util.concurrent.TimeUnit;
 
 /**
  * 提交记录服务实现类
  */
 @Service
 @RequiredArgsConstructor
-@Slf4j
 public class SubmissionServiceImpl extends ServiceImpl<SubmissionMapper, Submission> implements SubmissionService {
 
     private final UserService userService;
     private final ProblemService problemService;
-    private final Random random = new Random();
-    private final RocketMQTemplate rocketMQTemplate;
+    private final SubmissionOutbox submissionOutbox;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -75,19 +69,12 @@ public class SubmissionServiceImpl extends ServiceImpl<SubmissionMapper, Submiss
         }
 
         // 更新题目提交数
-        problemService.incrementSubmitCount(dto.getProblemId());
-
-        // 发送消息到 RocketMQ
-        log.info("准备发送 RocketMQ 消息，submissionId: {}", submission.getId());
-        try {
-            rocketMQTemplate.convertAndSend("submission-topic", submission.getId());
-            log.info("RocketMQ 消息发送成功，submissionId: {}", submission.getId());
-        } catch (Exception e) {
-            log.error("发送 RocketMQ 消息失败，submissionId: {}", submission.getId(), e);
-            // 这里可以根据业务需求决定是否需要回滚事务或进行其他补偿操作
-            // 例如，可以抛出异常让 @Transactional 回滚
-             throw new BusinessException(ResultCodeEnum.SYSTEM_ERROR);
+        if (!problemService.incrementSubmitCount(dto.getProblemId())) {
+            throw new BusinessException(ResultCodeEnum.UPDATE_ERROR);
         }
+
+        // 与提交记录处于同一数据库事务；消息由独立发布器可靠投递。
+        submissionOutbox.enqueue(submission);
 
         return submission.getId();
     }

@@ -6,8 +6,10 @@ import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import com.zephyr.croj.common.enums.ResultCodeEnum;
 import com.zephyr.croj.common.enums.SubmissionStatusEnum;
 import com.zephyr.croj.common.exception.BusinessException;
+import com.zephyr.croj.contest.ContestService;
 import com.zephyr.croj.mapper.SubmissionMapper;
 import com.zephyr.croj.mapper.JudgeAttemptMapper;
+import com.zephyr.croj.mapper.ProblemVersionMapper;
 import com.zephyr.croj.model.dto.SubmissionDTO;
 import com.zephyr.croj.model.dto.SubmissionQueryDTO;
 import com.zephyr.croj.model.entity.Problem;
@@ -36,6 +38,8 @@ public class SubmissionServiceImpl extends ServiceImpl<SubmissionMapper, Submiss
     private final ProblemService problemService;
     private final SubmissionOutbox submissionOutbox;
     private final JudgeAttemptMapper judgeAttempts;
+    private final ContestService contestService;
+    private final ProblemVersionMapper problemVersions;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -60,6 +64,18 @@ public class SubmissionServiceImpl extends ServiceImpl<SubmissionMapper, Submiss
         // 创建提交记录
         Submission submission = new Submission();
         submission.setProblemId(dto.getProblemId());
+        if (dto.getContestId() != null) {
+            submission.setContestId(dto.getContestId());
+            submission.setProblemVersionId(
+                    contestService.validateSubmission(dto.getContestId(), userId, dto.getProblemId()));
+        } else {
+            Long publishedVersionId = problem.getPublishedVersionId();
+            if (publishedVersionId == null
+                    || !problemVersions.isJudgeReady(problem.getId(), publishedVersionId)) {
+                throw new BusinessException(ResultCodeEnum.PROBLEM_NOT_JUDGE_READY);
+            }
+            submission.setProblemVersionId(publishedVersionId);
+        }
         submission.setUserId(userId);
         submission.setLanguage(dto.getLanguage());
         submission.setCode(dto.getCode());

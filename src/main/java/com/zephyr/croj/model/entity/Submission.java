@@ -29,6 +29,16 @@ public class Submission implements Serializable {
     private Long problemId;
 
     /**
+     * 提交时固定的题目版本；比赛提交必须设置。
+     */
+    private Long problemVersionId;
+
+    /**
+     * 所属比赛；普通题库提交为空。
+     */
+    private Long contestId;
+
+    /**
      * 用户ID
      */
     private Long userId;

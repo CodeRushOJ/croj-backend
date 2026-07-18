@@ -10,4 +10,13 @@ import org.apache.ibatis.annotations.Select;
 public interface ProblemVersionMapper extends BaseMapper<ProblemVersion> {
     @Select("SELECT COALESCE(MAX(version_no), 0) FROM t_problem_version WHERE problem_id = #{problemId}")
     int findLatestVersionNumber(@Param("problemId") Long problemId);
+
+    @Select("""
+            SELECT COUNT(*) > 0 FROM t_problem_version pv
+            JOIN t_test_bundle tb ON tb.problem_version_id=pv.id
+            WHERE pv.problem_id=#{problemId} AND pv.id=#{versionId} AND pv.state='PUBLISHED'
+            """)
+    boolean isJudgeReady(
+            @Param("problemId") Long problemId,
+            @Param("versionId") Long versionId);
 }

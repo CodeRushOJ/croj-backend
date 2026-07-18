@@ -1,6 +1,8 @@
 # CodeRushOJ Backend
 
-Spring Boot 业务 API，当前覆盖身份、用户、题目、标签、提交、邮箱验证和管理端基础能力。完整 OJ v1 将在保留现有接口价值的基础上演进为按业务能力拆分的模块化单体，并补齐竞赛、论坛、题解、审核、对象存储和可靠判题投递。
+Spring Boot 业务 API，当前覆盖身份、用户、题目、标签、提交、论坛、评论、题解、邮箱验证和管理端基础能力。完整 OJ v1 在保留现有接口价值的基础上演进为按业务能力拆分的模块化单体，并继续补齐竞赛、内容审核、对象存储和可靠判题投递。
+
+论坛与题解使用 `/api/v1` 版本化 REST API。公开内容允许匿名读取，发布和删除需要 JWT；作者只能删除自己的内容，管理员和超级管理员可以执行内容治理。详细请求、分页、状态与前端联调契约见 [`docs/api/community.md`](docs/api/community.md)。
 
 ## 配置安全
 
@@ -20,6 +22,8 @@ Flyway 在应用启动时按顺序执行 `src/main/resources/db/migration` 中�
 提交请求不会在数据库事务内直接访问 RocketMQ。后端在同一事务中写入提交记录、题目提交计数和 `SubmissionRequested` Outbox 事件，后台发布器再逐条 claim 并同步投递 submission ID。Broker 暂时不可用时按指数退避重试；后端异常退出留下的 claim 会在租约过期后由其他副本恢复。
 
 Outbox 参数可通过 `.env.example` 中的 `OUTBOX_*` 变量覆盖。`OUTBOX_CLAIM_TIMEOUT` 必须至少是 `OUTBOX_PUBLISH_TIMEOUT` 的两倍，默认分别为 30 秒和 5 秒；不满足约束时应用拒绝启动，避免多副本在消息尚未发送完成时重复抢占。
+
+论坛帖子、评论与题解的删除是状态迁移而非物理删除；公开查询只返回 `PUBLISHED`。题解记录发布时的 `problem_version_id`，确保题目后续更新不会改变历史题解所对应的题面。客户端只提交 Markdown，`content_html` 由服务端生成安全转义内容，禁止客户端注入 HTML。
 
 ## 测试
 

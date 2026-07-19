@@ -68,6 +68,10 @@ public class ProblemServiceImpl extends ServiceImpl<ProblemMapper, Problem> impl
         Problem problem = new Problem();
         BeanUtils.copyProperties(dto, problem);
 
+        // 新题先进入私有草稿；绑定隐藏测试包后再通过发布门禁公开。
+        problem.setStatus(1);
+        problem.setPublishedVersionId(null);
+
         // 设置初始值
         problem.setSubmitCount(0);
         problem.setAcceptedCount(0);
@@ -114,6 +118,10 @@ public class ProblemServiceImpl extends ServiceImpl<ProblemMapper, Problem> impl
 
         // 更新问题
         BeanUtils.copyProperties(dto, problem);
+
+        // 编辑产生新的草稿版本，不能沿用旧版本的发布资格。
+        problem.setStatus(1);
+        problem.setPublishedVersionId(null);
 
         // 如果是OI模式但未设置总分，则设置默认总分100
         if (dto.getJudgeMode() != null && dto.getJudgeMode() == 1 && dto.getTotalScore() == null) {
@@ -371,25 +379,18 @@ public class ProblemServiceImpl extends ServiceImpl<ProblemMapper, Problem> impl
 
     private void publishVersionSnapshot(Problem problem, Long actorId, int versionNo) {
         LocalDateTime now = LocalDateTime.now();
-        boolean published = Integer.valueOf(0).equals(problem.getStatus());
         ProblemVersion version = new ProblemVersion();
         version.setProblemId(problem.getId());
         version.setVersionNo(versionNo);
-        version.setState(published ? "PUBLISHED" : "DRAFT");
+        version.setState("DRAFT");
         version.setStatementJson(toJson(statementSnapshot(problem)));
         version.setLimitsJson(toJson(limitsSnapshot(problem)));
         version.setJudgeConfigJson(toJson(judgeSnapshot(problem)));
         version.setCreatedBy(actorId);
         version.setCreatedAt(now);
-        version.setPublishedAt(published ? now : null);
+        version.setPublishedAt(null);
         if (problemVersions.insert(version) != 1) {
             throw new BusinessException(ResultCodeEnum.CREATE_ERROR);
-        }
-        if (published) {
-            problem.setPublishedVersionId(version.getId());
-            if (!updateById(problem)) {
-                throw new BusinessException(ResultCodeEnum.UPDATE_ERROR);
-            }
         }
     }
 

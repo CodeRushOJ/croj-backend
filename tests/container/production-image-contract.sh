@@ -74,6 +74,11 @@ for ignored in '.git' 'target' '.m2' '.env' 'uploads' 'docs' 'tests'; do
 done
 
 require_pattern "$workflow" 'provenance:[[:space:]]+mode=max' 'CI must generate maximum BuildKit provenance'
+require_pattern "$workflow" '^  java-tests:' 'CI must define a Java test job before image construction'
+require_pattern "$workflow" 'needs:[[:space:]]+java-tests' 'production image must depend on Java tests'
+require_pattern "$workflow" '\./mvnw' 'CI Java job must use the repository Maven wrapper'
+require_pattern "$workflow" 'maven\.repo\.local=.*[[:space:]]test$' 'CI Java job must run the Maven test suite'
+require_pattern "$workflow" 'surefire-reports' 'CI must retain Surefire diagnostics on failure'
 require_pattern "$workflow" 'sbom:[[:space:]]+true' 'CI must request BuildKit SBOM attestations'
 require_pattern "$workflow" 'imagetools inspect --raw' 'CI must inspect machine-readable base index manifests'
 require_pattern "$workflow" 'jq -e' 'CI must fail when required base platforms are absent'

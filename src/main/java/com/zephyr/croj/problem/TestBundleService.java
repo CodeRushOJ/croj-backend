@@ -12,10 +12,16 @@ import com.zephyr.croj.model.entity.ProblemVersion;
 import com.zephyr.croj.model.entity.TestBundle;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.HexFormat;
+import java.util.Map;
 import java.util.Set;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 import lombok.RequiredArgsConstructor;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -39,6 +45,7 @@ public class TestBundleService {
             throw invalidBundle("test bundle archive size is invalid");
         }
         String canonicalManifest = validateManifest(manifestJson);
+        validateArchive(archive, canonicalManifest);
         String sha256 = sha256(archive);
         String objectKey = "test-bundles/%d/%d/%s.zip".formatted(problemId, versionId, sha256);
 
@@ -129,6 +136,84 @@ public class TestBundleService {
             throw invalidBundle("test case " + field + " path is unsafe");
         }
         return path;
+    }
+
+    private void validateArchive(byte[] archive, String canonicalManifest) {
+        if (archive.length < 4
+                || archive[0] != 'P'
+                || archive[1] != 'K'
+                || archive[2] != 3
+                || archive[3] != 4) {
+            throw invalidBundle("test bundle is not a ZIP archive");
+        }
+        Map<String, Long> expectedBytes = expectedArchiveEntries(canonicalManifest);
+        Set<String> names = new HashSet<>();
+        long totalBytes = 0;
+        long maximumByRatio = Math.multiplyExact(
+                (long) archive.length,
+                properties.getMaxCompressionRatio());
+        int entries = 0;
+        byte[] buffer = new byte[8192];
+        try (ZipInputStream zip = new ZipInputStream(new ByteArrayInputStream(archive))) {
+            ZipEntry entry;
+            while ((entry = zip.getNextEntry()) != null) {
+                entries++;
+                String name = entry.getName();
+                if (entry.isDirectory() || !safeArchivePath(name) || !names.add(name)) {
+                    throw invalidBundle("test bundle contains an unsafe or duplicate ZIP entry");
+                }
+                Long expected = expectedBytes.remove(name);
+                if (expected == null) {
+                    throw invalidBundle("test bundle contains an undeclared ZIP entry");
+                }
+                long entryBytes = 0;
+                int read;
+                while ((read = zip.read(buffer)) != -1) {
+                    entryBytes = Math.addExact(entryBytes, read);
+                    totalBytes = Math.addExact(totalBytes, read);
+                    if (entryBytes > expected
+                            || totalBytes > properties.getMaxUncompressedBytes()
+                            || totalBytes > maximumByRatio) {
+                        throw invalidBundle("test bundle ZIP contents exceed declared limits");
+                    }
+                }
+                if (entryBytes != expected) {
+                    throw invalidBundle("test bundle ZIP entry size does not match the manifest");
+                }
+                zip.closeEntry();
+            }
+        } catch (IOException | ArithmeticException exception) {
+            throw invalidBundle("test bundle ZIP archive is invalid");
+        }
+        if (entries == 0 || !expectedBytes.isEmpty()) {
+            throw invalidBundle("test bundle ZIP entries do not match the manifest");
+        }
+    }
+
+    private Map<String, Long> expectedArchiveEntries(String canonicalManifest) {
+        try {
+            Map<String, Long> expected = new HashMap<>();
+            for (JsonNode testCase : objectMapper.readTree(canonicalManifest).get("cases")) {
+                expected.put(testCase.get("input").textValue(), testCase.get("inputBytes").longValue());
+                expected.put(testCase.get("output").textValue(), testCase.get("outputBytes").longValue());
+            }
+            return expected;
+        } catch (JsonProcessingException exception) {
+            throw invalidBundle("test bundle manifest is invalid");
+        }
+    }
+
+    private boolean safeArchivePath(String path) {
+        if (path == null
+                || path.isBlank()
+                || path.startsWith("/")
+                || path.contains("\\")
+                || path.indexOf('\0') >= 0
+                || path.contains("//")) {
+            return false;
+        }
+        return java.util.Arrays.stream(path.split("/"))
+                .noneMatch(segment -> segment.equals(".") || segment.equals("..") || segment.isBlank());
     }
 
     private String sha256(byte[] bytes) {

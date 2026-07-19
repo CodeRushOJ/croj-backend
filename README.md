@@ -37,7 +37,7 @@ Outbox 参数可通过 `.env.example` 中的 `OUTBOX_*` 变量覆盖。`OUTBOX_C
 
 ### 题目包导入
 
-题目导入使用 `ProblemPackageParser` SPI 将外部格式转换成统一的 `ProblemImportDraft`，后续再由预检作业创建草稿版本和测试包。首个解析器准确面向 [FreeProblemSet](https://github.com/zhblue/freeproblemset/tree/master) FPS XML 1.1/1.2/1.4，兼容题面、时/内存单位、多样例、隐藏测试、图片、标准解、代码模板、SPJ/TPJ/Interactor 和远程题目标识。
+题目导入使用 `ProblemPackageParser` SPI 将外部格式转换成统一的 `ProblemImportDraft`。管理员通过 `POST /v1/admin/problem-imports/preflight` 上传原始 XML 或单 XML ZIP；验证成功后原包暂存到私有 S3/MinIO，V8 数据库存储 24 小时、归属管理员的导入任务。`POST /v1/admin/problem-imports/{jobId}/commit` 会锁定任务、校验对象摘要并重新解析，在同一事务中创建草稿、生成真实 TestBundle、通过发布门禁公开；已完成任务可安全重试。该设计适用于 Kubernetes 多副本，不依赖 Pod 本地状态。完整契约见 [`docs/api/test-bundles.md`](docs/api/test-bundles.md)。首个解析器准确面向 [FreeProblemSet](https://github.com/zhblue/freeproblemset/tree/master) FPS XML 1.1/1.2/1.4，兼容题面、时/内存单位、多样例、隐藏测试、图片、标准解、代码模板、SPJ/TPJ/Interactor 和远程题目标识。
 
 FPS XML 使用 StAX 流式读取。解析器只接受 FreeProblemSet 官方 PUBLIC DOCTYPE 声明，但始终禁用 DTD 解析、外部实体与网络访问；包含内部实体或其他 DTD 的文件会被拒绝。文本、题目数、测试数和内嵌图片均有硬上限。导入的标准解与裁判程序只作为待审核资源保存，解析阶段绝不执行。兼容性测试包含 FreeProblemSet 上游提交 `7782b3815fd40f5bba95b5d7b90e3fbefafae656` 的真实 `fps-zhblue-A+B.xml`，覆盖其 1.4 版本、PUBLIC DOCTYPE 与测试点排列。后续解析器通过同一 SPI 增加 CodeRush 原生包、ICPC problem package 和 Polygon package，不在一个解析器内堆叠格式判断。
 

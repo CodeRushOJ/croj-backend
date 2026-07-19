@@ -15,7 +15,12 @@ import com.zephyr.croj.mapper.ProblemVersionMapper;
 import com.zephyr.croj.mapper.TestBundleMapper;
 import com.zephyr.croj.model.entity.ProblemVersion;
 import com.zephyr.croj.model.entity.TestBundle;
-import java.nio.charset.StandardCharsets;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -46,7 +51,7 @@ class TestBundleServiceTest {
             invocation.<TestBundle>getArgument(0).setId(7L);
             return 1;
         });
-        byte[] archive = "immutable-hidden-tests".getBytes(StandardCharsets.UTF_8);
+        byte[] archive = zip(Map.of("cases/1.in", "in", "cases/1.out", "ok"));
         String manifest = """
                 {"totalUncompressedBytes":4,"cases":[
                   {"id":1,"input":"cases/1.in","output":"cases/1.out","inputBytes":2,"outputBytes":2}
@@ -86,5 +91,86 @@ class TestBundleServiceTest {
 
         verifyNoInteractions(storage);
         verifyNoInteractions(bundles);
+    }
+
+    @Test
+    void rejectsBytesThatAreNotAZipEvenWhenTheManifestLooksValid() {
+        draftVersion();
+
+        assertThrows(BusinessException.class, () -> service.attach(
+                42L,
+                101L,
+                new byte[] {1, 2, 3, 4},
+                validManifest(2, 2)));
+
+        verifyNoInteractions(storage);
+        verifyNoInteractions(bundles);
+    }
+
+    @Test
+    void rejectsArchiveEntriesThatAreUndeclaredOrHaveDifferentActualSizes() {
+        draftVersion();
+        byte[] undeclared = zip(Map.of(
+                "cases/1.in", "in",
+                "cases/1.out", "ok",
+                "cases/secret.txt", "hidden"));
+        assertThrows(BusinessException.class, () -> service.attach(
+                42L, 101L, undeclared, validManifest(2, 2)));
+
+        byte[] wrongSize = zip(Map.of("cases/1.in", "longer", "cases/1.out", "ok"));
+        assertThrows(BusinessException.class, () -> service.attach(
+                42L, 101L, wrongSize, validManifest(2, 2)));
+
+        verifyNoInteractions(storage);
+        verifyNoInteractions(bundles);
+    }
+
+    @Test
+    void rejectsTraversalEntriesBeforeObjectStorage() {
+        draftVersion();
+        Map<String, String> entries = new LinkedHashMap<>();
+        entries.put("cases/1.in", "in");
+        entries.put("cases/1.out", "ok");
+        entries.put("cases/../escape", "bad");
+
+        assertThrows(BusinessException.class, () -> service.attach(
+                42L, 101L, zip(entries), validManifest(2, 2)));
+
+        verifyNoInteractions(storage);
+        verifyNoInteractions(bundles);
+    }
+
+    private void draftVersion() {
+        ProblemVersion version = new ProblemVersion();
+        version.setId(101L);
+        version.setProblemId(42L);
+        version.setState("DRAFT");
+        when(versions.selectById(101L)).thenReturn(version);
+    }
+
+    private String validManifest(long inputBytes, long outputBytes) {
+        return """
+                {"totalUncompressedBytes":%d,"cases":[
+                  {"id":1,"input":"cases/1.in","output":"cases/1.out","inputBytes":%d,"outputBytes":%d}
+                ]}
+                """.formatted(inputBytes + outputBytes, inputBytes, outputBytes);
+    }
+
+    private byte[] zip(Map<String, String> entries) {
+        try {
+            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+            try (ZipOutputStream zip = new ZipOutputStream(bytes)) {
+                for (Map.Entry<String, String> entry : entries.entrySet()) {
+                    ZipEntry item = new ZipEntry(entry.getKey());
+                    item.setTime(0L);
+                    zip.putNextEntry(item);
+                    zip.write(entry.getValue().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                    zip.closeEntry();
+                }
+            }
+            return bytes.toByteArray();
+        } catch (IOException exception) {
+            throw new AssertionError(exception);
+        }
     }
 }

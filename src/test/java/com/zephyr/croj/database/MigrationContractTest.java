@@ -24,6 +24,8 @@ class MigrationContractTest {
             "src", "main", "resources", "db", "migration", "V6__global_announcements.sql");
     private static final Path FORUM_RESOURCES = Path.of(
             "src", "main", "resources", "db", "migration", "V7__forum_resource_associations.sql");
+    private static final Path PROBLEM_IMPORT_JOBS = Path.of(
+            "src", "main", "resources", "db", "migration", "V8__problem_import_jobs.sql");
 
     @Test
     void cleanSchemaCoversTheCompleteFreeOjDomain() throws IOException {
@@ -126,5 +128,19 @@ class MigrationContractTest {
         assertTrue(sql.contains("'general'"));
         assertTrue(sql.contains("'problem'"));
         assertTrue(sql.contains("'contest'"));
+    }
+
+    @Test
+    void problemImportJobsUseANewForwardOnlyMigration() throws IOException {
+        assertTrue(Files.isRegularFile(PROBLEM_IMPORT_JOBS));
+        String sql = Files.readString(PROBLEM_IMPORT_JOBS).toLowerCase();
+        assertTrue(sql.contains("create table `t_problem_import_job`"));
+        assertTrue(sql.contains("`actor_id` bigint"));
+        assertTrue(sql.contains("`file_sha256` char(64)"));
+        assertTrue(sql.contains("`staging_object_key` varchar(512)"));
+        assertTrue(sql.contains("`summary_json` json"));
+        assertTrue(sql.contains("`expires_at` datetime(3)"));
+        assertTrue(sql.contains("`imported_count` int"));
+        assertTrue(sql.contains("idx_problem_import_expiry"));
     }
 }

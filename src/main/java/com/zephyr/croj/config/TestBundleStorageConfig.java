@@ -7,6 +7,8 @@ import com.zephyr.croj.mapper.TestBundleMapper;
 import com.zephyr.croj.problem.S3TestBundleStorage;
 import com.zephyr.croj.problem.TestBundleService;
 import com.zephyr.croj.problem.TestBundleStorage;
+import com.zephyr.croj.problem.importer.ProblemImportStagingStorage;
+import com.zephyr.croj.problem.importer.S3ProblemImportStagingStorage;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -38,6 +40,13 @@ public class TestBundleStorageConfig {
     @Bean
     TestBundleStorage testBundleStorage(S3Client testBundleS3Client, TestBundleProperties properties) {
         return new S3TestBundleStorage(testBundleS3Client, properties);
+    }
+
+    @Bean
+    ProblemImportStagingStorage problemImportStagingStorage(
+            S3Client testBundleS3Client,
+            TestBundleProperties properties) {
+        return new S3ProblemImportStagingStorage(testBundleS3Client, properties);
     }
 
     @Bean

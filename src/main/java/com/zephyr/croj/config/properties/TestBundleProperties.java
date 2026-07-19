@@ -19,4 +19,5 @@ public class TestBundleProperties {
     @Positive private long maxArchiveBytes = 256L * 1024 * 1024;
     @Positive private long maxUncompressedBytes = 1024L * 1024 * 1024;
     @Positive private int maxCases = 10_000;
+    @Positive private int maxCompressionRatio = 100;
 }

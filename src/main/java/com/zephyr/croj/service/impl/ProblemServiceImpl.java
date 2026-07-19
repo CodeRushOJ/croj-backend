@@ -116,12 +116,20 @@ public class ProblemServiceImpl extends ServiceImpl<ProblemMapper, Problem> impl
             throw new BusinessException(ResultCodeEnum.FORBIDDEN);
         }
 
+        Integer stableStatus = problem.getStatus();
+        Long stablePublishedVersionId = problem.getPublishedVersionId();
+
         // 更新问题
         BeanUtils.copyProperties(dto, problem);
 
-        // 编辑产生新的草稿版本，不能沿用旧版本的发布资格。
-        problem.setStatus(1);
-        problem.setPublishedVersionId(null);
+        // 编辑产生新的草稿版本；已有稳定版本继续对外，直到新版本原子发布。
+        if (stablePublishedVersionId == null) {
+            problem.setStatus(1);
+            problem.setPublishedVersionId(null);
+        } else {
+            problem.setStatus(stableStatus);
+            problem.setPublishedVersionId(stablePublishedVersionId);
+        }
 
         // 如果是OI模式但未设置总分，则设置默认总分100
         if (dto.getJudgeMode() != null && dto.getJudgeMode() == 1 && dto.getTotalScore() == null) {

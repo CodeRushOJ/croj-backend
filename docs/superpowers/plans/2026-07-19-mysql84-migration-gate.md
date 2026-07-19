@@ -56,7 +56,7 @@
 **Files:**
 - Verify all changed files.
 
-- [ ] Run ShellCheck, the real MySQL migration gate, focused migration contract tests, and the full Maven test suite.
-- [ ] Inspect the diff for immutable migration changes; the check must report none under `src/main/resources/db/migration`.
+- [x] Run ShellCheck, the real MySQL migration gate, focused migration contract tests, and the full Maven test suite.
+- [x] Inspect the diff for immutable migration changes; the check must report none under `src/main/resources/db/migration`.
 - [ ] Request an independent spec/code review and resolve all Critical or Important findings.
 - [ ] Commit intentionally, push `codex/mysql84-migration-gate`, and open a Draft PR with base `codex/discussion-resources`.

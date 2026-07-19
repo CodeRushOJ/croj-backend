@@ -5,14 +5,13 @@ FROM maven:3.9-eclipse-temurin-17@sha256:1ed5d1f54416b706707b4f3238f63a20bb06aab
 
 WORKDIR /workspace
 
-COPY .mvn/ .mvn/
-COPY mvnw pom.xml ./
+COPY pom.xml ./
 RUN --mount=type=cache,target=/root/.m2 \
-    ./mvnw -B -ntp -DskipTests dependency:go-offline
+    mvn -B -ntp -DskipTests dependency:go-offline
 
 COPY src/main/ src/main/
 RUN --mount=type=cache,target=/root/.m2 \
-    ./mvnw -B -ntp -Dmaven.test.skip=true package
+    mvn -B -ntp -Dmaven.test.skip=true package
 
 # Google Distroless supported Java 17 multi-platform nonroot index.
 FROM gcr.io/distroless/java17-debian13:nonroot@sha256:81d09cac6ec47f6a13c61a941557f95079213320f3ddbf9d353de9317669aab5 AS runtime
@@ -40,11 +39,10 @@ COPY --from=builder --chown=65532:65532 \
 
 ENV SPRING_PROFILES_ACTIVE=prod \
     TMPDIR=/tmp \
-    FILE_UPLOAD_DIR=/app/uploads \
-    JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=75.0 -Djava.io.tmpdir=/tmp"
+    FILE_UPLOAD_DIR=/app/uploads
 
 USER 65532:65532
 EXPOSE 7999
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=60s --retries=3 CMD ["/usr/bin/java","-cp","/app/healthcheck","com.coderushoj.container.ActuatorHealthCheck"]
-ENTRYPOINT ["/usr/bin/java","-jar","/app/croj.jar"]
+ENTRYPOINT ["/usr/bin/java","-XX:MaxRAMPercentage=75.0","-Djava.io.tmpdir=/tmp","-jar","/app/croj.jar"]

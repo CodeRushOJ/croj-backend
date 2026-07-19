@@ -43,15 +43,22 @@ require_pattern "$dockerfile" '^FROM maven:[^ ]+@sha256:[0-9a-f]{64} AS builder$
 require_pattern "$dockerfile" '^FROM (gcr\.io/)?distroless/java17-debian13:[^ ]+@sha256:[0-9a-f]{64} AS runtime$' 'missing pinned Distroless Java 17 runtime stage'
 require_pattern "$dockerfile" 'RUN --mount=type=cache,target=/root/\.m2' 'Maven BuildKit cache mount is required'
 require_pattern "$dockerfile" 'dependency:go-offline' 'dependency-first Maven prefetch is required'
+require_pattern "$dockerfile" 'mvn -B -ntp' 'build must use Maven from the digest-pinned builder image'
 require_pattern "$dockerfile" '^USER 65532:65532$' 'runtime must use fixed UID/GID 65532'
 require_pattern "$dockerfile" '^EXPOSE 7999$' 'runtime must expose port 7999'
 require_pattern "$dockerfile" 'SPRING_PROFILES_ACTIVE=prod' 'runtime must activate the prod profile'
 require_pattern "$dockerfile" 'TMPDIR=/tmp' 'runtime must use the mounted /tmp directory'
 require_pattern "$dockerfile" 'FILE_UPLOAD_DIR=/app/uploads' 'runtime must use the mounted uploads directory'
 require_pattern "$dockerfile" '^HEALTHCHECK .*CMD.*java.*ActuatorHealthCheck' 'runtime must declare the Java Actuator healthcheck'
-require_pattern "$dockerfile" '^ENTRYPOINT \["/usr/bin/java","-jar","/app/croj\.jar"\]$' 'runtime entrypoint must directly exec Java'
+require_pattern "$dockerfile" '^ENTRYPOINT \["/usr/bin/java","-XX:MaxRAMPercentage=75\.0","-Djava\.io\.tmpdir=/tmp","-jar","/app/croj\.jar"\]$' 'runtime entrypoint must directly exec Java with non-secret JVM settings'
 require_pattern "$dockerfile" 'org\.opencontainers\.image\.base\.digest=' 'runtime base digest OCI metadata is required'
 reject_pattern "$dockerfile" '(^|[[:space:]])(apt-get|apk|yum|dnf)[[:space:]]' 'Dockerfile must not install a shell or package manager payload'
+reject_pattern "$dockerfile" 'JAVA_TOOL_OPTIONS' 'healthcheck must not inherit launcher options that Java prints to health logs'
+reject_pattern "$dockerfile" '\./mvnw' 'production build must not download an unpinned Maven distribution'
+
+while IFS= read -r base_ref; do
+  grep -Fq -- "$base_ref" "$workflow" || fail "workflow must verify Dockerfile base $base_ref"
+done < <(sed -nE 's/^FROM ([^ ]+@sha256:[0-9a-f]{64}) AS .+$/\1/p' "$dockerfile")
 
 require_pattern "$healthcheck_source" 'http://127\.0\.0\.1:7999/api/actuator/health/liveness' 'healthcheck URL must be fixed to localhost liveness'
 require_pattern "$healthcheck_source" 'setConnectTimeout\(' 'healthcheck must set a connect timeout'

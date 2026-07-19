@@ -40,9 +40,15 @@ docker image inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$imag
   fail 'FILE_UPLOAD_DIR is not /app/uploads'
 
 entrypoint="$(docker image inspect --format '{{json .Config.Entrypoint}}' "$image_ref")"
-[[ "$entrypoint" == '["/usr/bin/java","-jar","/app/croj.jar"]' ]] || fail "unexpected entrypoint: $entrypoint"
+[[ "$entrypoint" == '["/usr/bin/java","-XX:MaxRAMPercentage=75.0","-Djava.io.tmpdir=/tmp","-jar","/app/croj.jar"]' ]] ||
+  fail "unexpected entrypoint: $entrypoint"
+if docker image inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$image_ref" | grep -q '^JAVA_TOOL_OPTIONS='; then
+  fail 'JAVA_TOOL_OPTIONS would be printed by every healthcheck JVM'
+fi
 healthcheck="$(docker image inspect --format '{{json .Config.Healthcheck.Test}}' "$image_ref")"
 [[ "$healthcheck" == *'ActuatorHealthCheck'* ]] || fail 'Java Actuator healthcheck is missing'
+volumes="$(docker image inspect --format '{{json .Config.Volumes}}' "$image_ref")"
+[[ "$volumes" == 'null' || "$volumes" == '{}' ]] || fail "anonymous image volumes are forbidden: $volumes"
 
 for label in org.opencontainers.image.source org.opencontainers.image.revision org.opencontainers.image.base.name org.opencontainers.image.base.digest; do
   value="$(docker image inspect --format "{{index .Config.Labels \"$label\"}}" "$image_ref")"
@@ -56,6 +62,7 @@ docker container export "$container_id" --output "$inspection_dir/rootfs.tar"
 tar -tf "$inspection_dir/rootfs.tar" > "$inspection_dir/files.txt"
 
 grep -Eq '(^|\./)app/croj\.jar$' "$inspection_dir/files.txt" || fail 'application JAR is missing'
+grep -Eq '(^|\./)usr/bin/java$' "$inspection_dir/files.txt" || fail 'Java runtime entrypoint is missing'
 grep -Eq '(^|\./)app/healthcheck/com/coderushoj/container/ActuatorHealthCheck\.class$' "$inspection_dir/files.txt" ||
   fail 'compiled healthcheck class is missing'
 

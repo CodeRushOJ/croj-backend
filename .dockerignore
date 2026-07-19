@@ -14,11 +14,6 @@ README.md
 CHANGELOG.md
 
 !pom.xml
-!mvnw
-!.mvn/
-!.mvn/wrapper/
-!.mvn/wrapper/maven-wrapper.jar
-!.mvn/wrapper/maven-wrapper.properties
 !src/
 !src/main/
 !src/main/**

@@ -30,6 +30,12 @@ Outbox 参数可通过 `.env.example` 中的 `OUTBOX_*` 变量覆盖。`OUTBOX_C
 
 论坛帖子、评论与题解的删除是状态迁移而非物理删除；公开查询只返回 `PUBLISHED`。题解记录发布时的 `problem_version_id`，确保题目后续更新不会改变历史题解所对应的题面。客户端只提交 Markdown，`content_html` 由服务端生成安全转义内容，禁止客户端注入 HTML。
 
+### 题目包导入
+
+题目导入使用 `ProblemPackageParser` SPI 将外部格式转换成统一的 `ProblemImportDraft`，后续再由预检作业创建草稿版本和测试包。首个解析器准确面向 [FreeProblemSet](https://github.com/zhblue/freeproblemset/tree/master) FPS XML 1.1/1.2，兼容题面、时/内存单位、多样例、隐藏测试、图片、标准解、代码模板、SPJ/TPJ/Interactor 和远程题目标识。
+
+FPS XML 使用禁用 DTD、外部实体和网络解析的 StAX 流式读取；文本、题目数、测试数和内嵌图片均有硬上限。导入的标准解与裁判程序只作为待审核资源保存，解析阶段绝不执行。兼容性测试基线固定为 FreeProblemSet 上游提交 `7782b3815fd40f5bba95b5d7b90e3fbefafae656`。后续解析器通过同一 SPI 增加 CodeRush 原生包、ICPC problem package 和 Polygon package，不在一个解析器内堆叠格式判断。
+
 ## 测试
 
 不需要在宿主机安装 Java。使用 Java 17 容器和持久化 Maven 缓存运行：

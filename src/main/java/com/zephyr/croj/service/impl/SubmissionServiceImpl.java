@@ -58,19 +58,19 @@ public class SubmissionServiceImpl extends ServiceImpl<SubmissionMapper, Submiss
             throw new BusinessException(ResultCodeEnum.PROBLEM_NOT_EXIST);
         }
 
-        // 如果是非公开题目，检查用户是否有权限提交
-        if (!problem.getStatus().equals(0) && !problemService.checkPermission(problem.getId(), userId)) {
-            throw new BusinessException(ResultCodeEnum.FORBIDDEN);
-        }
-
         // 创建提交记录
         Submission submission = new Submission();
         submission.setProblemId(dto.getProblemId());
         if (dto.getContestId() != null) {
+            // 比赛授权和锁定版本均由比赛聚合决定，不受题库当前可见性影响。
             submission.setContestId(dto.getContestId());
             submission.setProblemVersionId(
                     contestService.validateSubmission(dto.getContestId(), userId, dto.getProblemId()));
         } else {
+            // 题库提交仍遵守题目的当前公开状态和所有权。
+            if (!problem.getStatus().equals(0) && !problemService.checkPermission(problem.getId(), userId)) {
+                throw new BusinessException(ResultCodeEnum.FORBIDDEN);
+            }
             Long publishedVersionId = problem.getPublishedVersionId();
             if (publishedVersionId == null
                     || !problemVersions.isJudgeReady(problem.getId(), publishedVersionId)) {

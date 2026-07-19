@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -111,9 +112,10 @@ class SubmissionOutboxTest {
         user.setId(7L);
         Problem problem = new Problem();
         problem.setId(42L);
-        problem.setStatus(0);
+        problem.setStatus(1);
         when(users.getById(7L)).thenReturn(user);
         when(problems.getById(42L)).thenReturn(problem);
+        when(problems.checkPermission(42L, 7L)).thenReturn(false);
         when(problems.incrementSubmitCount(42L)).thenReturn(true);
         when(contests.validateSubmission(5L, 7L, 42L)).thenReturn(101L);
         doAnswer(invocation -> {
@@ -134,6 +136,7 @@ class SubmissionOutboxTest {
         assertEquals(5L, saved.getValue().getContestId());
         assertEquals(101L, saved.getValue().getProblemVersionId());
         verify(contests).validateSubmission(5L, 7L, 42L);
+        verify(problems, never()).checkPermission(42L, 7L);
     }
 
     @Test

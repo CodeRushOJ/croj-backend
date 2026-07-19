@@ -5,7 +5,12 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Optional;
 import java.util.Objects;
@@ -185,14 +190,21 @@ public class ContestRepository {
     public List<ContestProblem> listProblems(long contestId) {
         return jdbc.query(
                 """
-                SELECT contest_id,problem_id,problem_version_id,label,score
-                FROM t_contest_problem WHERE contest_id=? ORDER BY label,problem_id
+                SELECT cp.problem_id,cp.problem_version_id,cp.label,cp.score,
+                       pv.statement_json,pv.limits_json
+                FROM t_contest_problem cp
+                JOIN t_problem_version pv
+                  ON pv.id=cp.problem_version_id AND pv.problem_id=cp.problem_id
+                WHERE cp.contest_id=? AND pv.state='PUBLISHED'
+                ORDER BY cp.label,cp.problem_id
                 """,
                 (result, row) -> new ContestProblem(
                         result.getLong("problem_id"),
                         result.getLong("problem_version_id"),
                         result.getString("label"),
-                        result.getInt("score")),
+                        result.getInt("score"),
+                        result.getString("statement_json"),
+                        result.getString("limits_json")),
                 contestId);
     }
 
@@ -378,35 +390,75 @@ public class ContestRepository {
     }
 
     public String scoreboardSourceVersion(long contestId, Instant cutoffExclusive) {
-        String submissions = jdbc.queryForObject(
+        MessageDigest digest = sha256();
+        digestField(digest, "contest-scoreboard-v2");
+        jdbc.query(
                 """
-                SELECT COUNT(*) AS row_count,MAX(update_time) AS max_updated_at,
-                       COALESCE(SUM(id*17+status*31),0) AS status_checksum
-                FROM t_submission WHERE contest_id=? AND create_time<? AND status BETWEEN 1 AND 7
+                SELECT id,user_id,problem_id,status,create_time
+                FROM t_submission
+                WHERE contest_id=? AND create_time<?
+                ORDER BY id
                 """,
                 (result, row) -> {
-                    Timestamp updatedAt = result.getTimestamp("max_updated_at");
-                    long updatedMillis = updatedAt == null ? 0L : updatedAt.toInstant().toEpochMilli();
-                    return result.getLong("row_count") + ":" + updatedMillis + ":"
-                            + result.getLong("status_checksum");
+                    digestField(digest, "submission");
+                    digestField(digest, result.getLong("id"));
+                    digestField(digest, result.getLong("user_id"));
+                    digestField(digest, result.getLong("problem_id"));
+                    digestField(digest, result.getInt("status"));
+                    digestField(digest, result.getTimestamp("create_time").toInstant().toEpochMilli());
+                    return null;
                 },
                 contestId,
                 Timestamp.from(cutoffExclusive));
-        String registrations = jdbc.queryForObject(
+        jdbc.query(
                 """
-                SELECT COUNT(*) AS row_count,MAX(updated_at) AS max_updated_at,
-                       COALESCE(SUM(user_id*17 + CASE WHEN status='REGISTERED' THEN 31 ELSE 47 END),0)
-                         AS roster_checksum
-                FROM t_contest_registration WHERE contest_id=?
+                SELECT user_id,status
+                FROM t_contest_registration
+                WHERE contest_id=?
+                ORDER BY user_id
                 """,
                 (result, row) -> {
-                    Timestamp updatedAt = result.getTimestamp("max_updated_at");
-                    long updatedMillis = updatedAt == null ? 0L : updatedAt.toInstant().toEpochMilli();
-                    return result.getLong("row_count") + ":" + updatedMillis + ":"
-                            + result.getLong("roster_checksum");
+                    digestField(digest, "registration");
+                    digestField(digest, result.getLong("user_id"));
+                    digestField(digest, result.getString("status"));
+                    return null;
                 },
                 contestId);
-        return submissions + ":r:" + registrations;
+        jdbc.query(
+                """
+                SELECT problem_id,problem_version_id,label
+                FROM t_contest_problem
+                WHERE contest_id=?
+                ORDER BY label,problem_id
+                """,
+                (result, row) -> {
+                    digestField(digest, "problem");
+                    digestField(digest, result.getLong("problem_id"));
+                    digestField(digest, result.getLong("problem_version_id"));
+                    digestField(digest, result.getString("label"));
+                    return null;
+                },
+                contestId);
+        return HexFormat.of().formatHex(digest.digest());
+    }
+
+    private MessageDigest sha256() {
+        try {
+            return MessageDigest.getInstance("SHA-256");
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 is unavailable", exception);
+        }
+    }
+
+    private void digestField(MessageDigest digest, Object value) {
+        if (value == null) {
+            digest.update((byte) 0);
+            return;
+        }
+        byte[] bytes = value.toString().getBytes(StandardCharsets.UTF_8);
+        digest.update((byte) 1);
+        digest.update(ByteBuffer.allocate(Integer.BYTES).putInt(bytes.length).array());
+        digest.update(bytes);
     }
 
     public Optional<String> findScoreboardSnapshot(
@@ -501,7 +553,13 @@ public class ContestRepository {
         }
     }
 
-    public record ContestProblem(long problemId, long problemVersionId, String label, int score) {}
+    public record ContestProblem(
+            long problemId,
+            long problemVersionId,
+            String label,
+            int score,
+            String statementJson,
+            String limitsJson) {}
     public record AnnouncementView(
             long id, String title, String contentMarkdown, long publishedBy, Instant publishedAt) {}
     public record ClarificationView(

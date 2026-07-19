@@ -1,5 +1,6 @@
 package com.zephyr.croj.common.exception;
 
+import com.zephyr.croj.announcement.AnnouncementApiException;
 import com.zephyr.croj.common.enums.ResultCodeEnum;
 import com.zephyr.croj.common.response.Result;
 import com.zephyr.croj.contest.ContestApiException;
@@ -25,6 +26,13 @@ import java.util.Set;
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    @ExceptionHandler(AnnouncementApiException.class)
+    public ResponseEntity<Result<Void>> handleAnnouncementApiException(AnnouncementApiException exception) {
+        log.warn("公告请求失败: {}", exception.getMessage());
+        return ResponseEntity.status(exception.getStatus())
+                .body(Result.error(exception.getStatus().value() * 100, exception.getMessage()));
+    }
 
     @ExceptionHandler(ContestApiException.class)
     public ResponseEntity<Result<Void>> handleContestApiException(ContestApiException exception) {

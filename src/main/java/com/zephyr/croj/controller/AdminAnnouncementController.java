@@ -1,6 +1,7 @@
 package com.zephyr.croj.controller;
 
 import com.zephyr.croj.announcement.AnnouncementRequests;
+import com.zephyr.croj.announcement.AnnouncementApiException;
 import com.zephyr.croj.announcement.AnnouncementService;
 import com.zephyr.croj.common.response.Result;
 import io.swagger.v3.oas.annotations.Operation;
@@ -18,6 +19,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -50,8 +52,9 @@ public class AdminAnnouncementController {
     @Operation(summary = "Update announcement content and pin order")
     public Result<Void> update(
             @PathVariable @Min(1) long announcementId,
+            @RequestHeader("If-Match") String ifMatch,
             @RequestBody @Valid AnnouncementRequests.Draft body) {
-        announcements.update(announcementId, body, administratorId());
+        announcements.update(announcementId, version(ifMatch), body, administratorId());
         return Result.success();
     }
 
@@ -59,8 +62,9 @@ public class AdminAnnouncementController {
     @Operation(summary = "Schedule an announcement for future publication")
     public Result<Void> schedule(
             @PathVariable @Min(1) long announcementId,
+            @RequestHeader("If-Match") String ifMatch,
             @RequestBody @Valid AnnouncementRequests.Schedule body) {
-        announcements.schedule(announcementId, body, administratorId());
+        announcements.schedule(announcementId, version(ifMatch), body, administratorId());
         return Result.success();
     }
 
@@ -68,22 +72,27 @@ public class AdminAnnouncementController {
     @Operation(summary = "Publish an announcement immediately")
     public Result<Void> publish(
             @PathVariable @Min(1) long announcementId,
+            @RequestHeader("If-Match") String ifMatch,
             @RequestBody @Valid AnnouncementRequests.Publish body) {
-        announcements.publish(announcementId, body, administratorId());
+        announcements.publish(announcementId, version(ifMatch), body, administratorId());
         return Result.success();
     }
 
     @PostMapping("/{announcementId}/withdraw")
     @Operation(summary = "Withdraw a scheduled or published announcement to draft")
-    public Result<Void> withdraw(@PathVariable @Min(1) long announcementId) {
-        announcements.withdraw(announcementId, administratorId());
+    public Result<Void> withdraw(
+            @PathVariable @Min(1) long announcementId,
+            @RequestHeader("If-Match") String ifMatch) {
+        announcements.withdraw(announcementId, version(ifMatch), administratorId());
         return Result.success();
     }
 
     @PostMapping("/{announcementId}/archive")
     @Operation(summary = "Archive an announcement permanently")
-    public Result<Void> archive(@PathVariable @Min(1) long announcementId) {
-        announcements.archive(announcementId, administratorId());
+    public Result<Void> archive(
+            @PathVariable @Min(1) long announcementId,
+            @RequestHeader("If-Match") String ifMatch) {
+        announcements.archive(announcementId, version(ifMatch), administratorId());
         return Result.success();
     }
 
@@ -93,5 +102,20 @@ public class AdminAnnouncementController {
             return id;
         }
         throw new IllegalStateException("authenticated administrator userId is missing");
+    }
+
+    private long version(String ifMatch) {
+        String value = ifMatch == null ? "" : ifMatch.trim();
+        if (value.length() >= 2 && value.startsWith("\"") && value.endsWith("\"")) {
+            value = value.substring(1, value.length() - 1);
+        }
+        if (value.isEmpty() || !value.chars().allMatch(Character::isDigit)) {
+            throw AnnouncementApiException.badRequest("If-Match must contain an announcement version");
+        }
+        try {
+            return Long.parseLong(value);
+        } catch (NumberFormatException exception) {
+            throw AnnouncementApiException.badRequest("If-Match announcement version is out of range");
+        }
     }
 }

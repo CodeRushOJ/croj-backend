@@ -27,14 +27,22 @@ public class AnnouncementService {
     }
 
     @Transactional
-    public void update(long announcementId, AnnouncementRequests.Draft request, long administratorId) {
-        var current = requireMutable(announcementId);
-        changed(announcements.updateContent(announcementId, current.version(), request, administratorId));
+    public void update(
+            long announcementId,
+            long expectedVersion,
+            AnnouncementRequests.Draft request,
+            long administratorId) {
+        requireMutable(announcementId, expectedVersion);
+        changed(announcements.updateContent(announcementId, expectedVersion, request, administratorId));
     }
 
     @Transactional
-    public void schedule(long announcementId, AnnouncementRequests.Schedule request, long administratorId) {
-        var current = requireMutable(announcementId);
+    public void schedule(
+            long announcementId,
+            long expectedVersion,
+            AnnouncementRequests.Schedule request,
+            long administratorId) {
+        requireMutable(announcementId, expectedVersion);
         Instant now = clock.instant();
         if (!request.publishAt().isAfter(now)) {
             throw AnnouncementApiException.unprocessable("scheduled publication must be in the future");
@@ -42,35 +50,39 @@ public class AnnouncementService {
         validateWindow(request.publishAt(), request.expiresAt());
         changed(announcements.schedule(
                 announcementId,
-                current.version(),
+                expectedVersion,
                 request.publishAt(),
                 request.expiresAt(),
                 administratorId));
     }
 
     @Transactional
-    public void publish(long announcementId, AnnouncementRequests.Publish request, long administratorId) {
-        var current = requireMutable(announcementId);
+    public void publish(
+            long announcementId,
+            long expectedVersion,
+            AnnouncementRequests.Publish request,
+            long administratorId) {
+        requireMutable(announcementId, expectedVersion);
         Instant now = clock.instant();
         validateWindow(now, request.expiresAt());
         changed(announcements.publish(
-                announcementId, current.version(), now, request.expiresAt(), administratorId));
+                announcementId, expectedVersion, now, request.expiresAt(), administratorId));
     }
 
     @Transactional
-    public void withdraw(long announcementId, long administratorId) {
-        var current = require(announcementId);
+    public void withdraw(long announcementId, long expectedVersion, long administratorId) {
+        var current = requireVersion(announcementId, expectedVersion);
         if (current.lifecycle() != AnnouncementLifecycle.SCHEDULED
                 && current.lifecycle() != AnnouncementLifecycle.PUBLISHED) {
             throw AnnouncementApiException.unprocessable("only scheduled or published announcements can be withdrawn");
         }
-        changed(announcements.withdraw(announcementId, current.version(), administratorId));
+        changed(announcements.withdraw(announcementId, expectedVersion, administratorId));
     }
 
     @Transactional
-    public void archive(long announcementId, long administratorId) {
-        var current = requireMutable(announcementId);
-        changed(announcements.archive(announcementId, current.version(), clock.instant(), administratorId));
+    public void archive(long announcementId, long expectedVersion, long administratorId) {
+        requireMutable(announcementId, expectedVersion);
+        changed(announcements.archive(announcementId, expectedVersion, clock.instant(), administratorId));
     }
 
     @Transactional(readOnly = true)
@@ -119,8 +131,16 @@ public class AnnouncementService {
         return announcements.findById(announcementId).orElseThrow(AnnouncementApiException::notFound);
     }
 
-    private AnnouncementRepository.AnnouncementRecord requireMutable(long announcementId) {
+    private AnnouncementRepository.AnnouncementRecord requireVersion(long announcementId, long expectedVersion) {
         var current = require(announcementId);
+        if (current.version() != expectedVersion) {
+            throw AnnouncementApiException.conflict();
+        }
+        return current;
+    }
+
+    private AnnouncementRepository.AnnouncementRecord requireMutable(long announcementId, long expectedVersion) {
+        var current = requireVersion(announcementId, expectedVersion);
         if (current.lifecycle() == AnnouncementLifecycle.ARCHIVED) {
             throw AnnouncementApiException.unprocessable("archived announcements are immutable");
         }

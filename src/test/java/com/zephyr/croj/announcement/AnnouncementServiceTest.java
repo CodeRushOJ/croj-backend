@@ -51,7 +51,7 @@ class AnnouncementServiceTest {
         var request = new AnnouncementRequests.Schedule(NOW, NOW.plusSeconds(60));
 
         AnnouncementApiException error = assertThrows(
-                AnnouncementApiException.class, () -> service.schedule(1L, request, 9L));
+                AnnouncementApiException.class, () -> service.schedule(1L, 7L, request, 9L));
 
         assertEquals(HttpStatus.UNPROCESSABLE_ENTITY, error.getStatus());
         verify(repository, never()).schedule(
@@ -66,7 +66,7 @@ class AnnouncementServiceTest {
         AnnouncementApiException error = assertThrows(
                 AnnouncementApiException.class,
                 () -> service.schedule(
-                        1L, new AnnouncementRequests.Schedule(publishAt, publishAt), 9L));
+                        1L, 7L, new AnnouncementRequests.Schedule(publishAt, publishAt), 9L));
 
         assertEquals(HttpStatus.UNPROCESSABLE_ENTITY, error.getStatus());
     }
@@ -78,6 +78,7 @@ class AnnouncementServiceTest {
 
         service.schedule(
                 1L,
+                7L,
                 new AnnouncementRequests.Schedule(NOW.plusSeconds(60), NOW.plusSeconds(120)),
                 9L);
 
@@ -90,7 +91,7 @@ class AnnouncementServiceTest {
 
         AnnouncementApiException error = assertThrows(
                 AnnouncementApiException.class,
-                () -> service.publish(1L, new AnnouncementRequests.Publish(NOW), 9L));
+                () -> service.publish(1L, 7L, new AnnouncementRequests.Publish(NOW), 9L));
 
         assertEquals(HttpStatus.UNPROCESSABLE_ENTITY, error.getStatus());
         verify(repository, never()).publish(
@@ -102,7 +103,7 @@ class AnnouncementServiceTest {
         when(repository.findById(1L)).thenReturn(Optional.of(draft()));
         when(repository.publish(1L, 7L, NOW, NOW.plusSeconds(3600), 9L)).thenReturn(1);
 
-        service.publish(1L, new AnnouncementRequests.Publish(NOW.plusSeconds(3600)), 9L);
+        service.publish(1L, 7L, new AnnouncementRequests.Publish(NOW.plusSeconds(3600)), 9L);
 
         verify(repository).publish(1L, 7L, NOW, NOW.plusSeconds(3600), 9L);
     }
@@ -114,7 +115,7 @@ class AnnouncementServiceTest {
 
         AnnouncementApiException error = assertThrows(
                 AnnouncementApiException.class,
-                () -> service.publish(1L, new AnnouncementRequests.Publish(null), 9L));
+                () -> service.publish(1L, 7L, new AnnouncementRequests.Publish(null), 9L));
 
         assertEquals(HttpStatus.CONFLICT, error.getStatus());
     }
@@ -125,10 +126,10 @@ class AnnouncementServiceTest {
 
         AnnouncementApiException updateError = assertThrows(
                 AnnouncementApiException.class,
-                () -> service.update(1L, new AnnouncementRequests.Draft("New", "Body", false, 0), 9L));
+                () -> service.update(1L, 8L, new AnnouncementRequests.Draft("New", "Body", false, 0), 9L));
         AnnouncementApiException publishError = assertThrows(
                 AnnouncementApiException.class,
-                () -> service.publish(1L, new AnnouncementRequests.Publish(null), 9L));
+                () -> service.publish(1L, 8L, new AnnouncementRequests.Publish(null), 9L));
 
         assertEquals(HttpStatus.UNPROCESSABLE_ENTITY, updateError.getStatus());
         assertEquals(HttpStatus.UNPROCESSABLE_ENTITY, publishError.getStatus());
@@ -139,7 +140,7 @@ class AnnouncementServiceTest {
         when(repository.findById(1L)).thenReturn(Optional.of(draft()));
 
         AnnouncementApiException error = assertThrows(
-                AnnouncementApiException.class, () -> service.withdraw(1L, 9L));
+                AnnouncementApiException.class, () -> service.withdraw(1L, 7L, 9L));
 
         assertEquals(HttpStatus.UNPROCESSABLE_ENTITY, error.getStatus());
         verify(repository, never()).withdraw(anyLong(), anyLong(), anyLong());
@@ -150,9 +151,25 @@ class AnnouncementServiceTest {
         when(repository.findById(1L)).thenReturn(Optional.of(draft()));
         when(repository.archive(1L, 7L, NOW, 9L)).thenReturn(1);
 
-        service.archive(1L, 9L);
+        service.archive(1L, 7L, 9L);
 
         verify(repository).archive(1L, 7L, NOW, 9L);
+    }
+
+    @Test
+    void clientVersionPreventsAStaleEditorFromOverwritingNewerContent() {
+        when(repository.findById(1L)).thenReturn(Optional.of(draft()));
+
+        AnnouncementApiException error = assertThrows(
+                AnnouncementApiException.class,
+                () -> service.update(
+                        1L,
+                        6L,
+                        new AnnouncementRequests.Draft("Stale", "Old body", false, 0),
+                        9L));
+
+        assertEquals(HttpStatus.CONFLICT, error.getStatus());
+        verify(repository, never()).updateContent(anyLong(), anyLong(), any(), anyLong());
     }
 
     @Test

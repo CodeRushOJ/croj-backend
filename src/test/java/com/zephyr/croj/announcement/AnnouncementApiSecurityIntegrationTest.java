@@ -108,31 +108,36 @@ class AnnouncementApiSecurityIntegrationTest {
                 .andExpect(jsonPath("$.data").value(4));
         mvc.perform(put("/v1/admin/announcements/4")
                         .header("Authorization", "Bearer " + admin)
+                        .header("If-Match", "\"7\"")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(draft))
                 .andExpect(status().isOk());
         mvc.perform(post("/v1/admin/announcements/4/schedule")
                         .header("Authorization", "Bearer " + admin)
+                        .header("If-Match", "\"7\"")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"publishAt\":\"2026-07-20T02:00:00Z\",\"expiresAt\":null}"))
                 .andExpect(status().isOk());
         mvc.perform(post("/v1/admin/announcements/4/publish")
                         .header("Authorization", "Bearer " + admin)
+                        .header("If-Match", "\"7\"")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"expiresAt\":null}"))
                 .andExpect(status().isOk());
         mvc.perform(post("/v1/admin/announcements/4/withdraw")
-                        .header("Authorization", "Bearer " + admin))
+                        .header("Authorization", "Bearer " + admin)
+                        .header("If-Match", "\"7\""))
                 .andExpect(status().isOk());
         mvc.perform(post("/v1/admin/announcements/4/archive")
-                        .header("Authorization", "Bearer " + admin))
+                        .header("Authorization", "Bearer " + admin)
+                        .header("If-Match", "\"7\""))
                 .andExpect(status().isOk());
 
-        verify(announcements).update(eq(4L), any(), eq(9L));
-        verify(announcements).schedule(eq(4L), any(), eq(9L));
-        verify(announcements).publish(eq(4L), any(), eq(9L));
-        verify(announcements).withdraw(4L, 9L);
-        verify(announcements).archive(4L, 9L);
+        verify(announcements).update(eq(4L), eq(7L), any(), eq(9L));
+        verify(announcements).schedule(eq(4L), eq(7L), any(), eq(9L));
+        verify(announcements).publish(eq(4L), eq(7L), any(), eq(9L));
+        verify(announcements).withdraw(4L, 7L, 9L);
+        verify(announcements).archive(4L, 7L, 9L);
     }
 
     @Test
@@ -156,18 +161,40 @@ class AnnouncementApiSecurityIntegrationTest {
 
         String admin = tokens.createToken(9L, "admin", List.of("ADMIN"));
         org.mockito.Mockito.doThrow(AnnouncementApiException.conflict())
-                .when(announcements).withdraw(4L, 9L);
+                .when(announcements).withdraw(4L, 7L, 9L);
         mvc.perform(post("/v1/admin/announcements/4/withdraw")
-                        .header("Authorization", "Bearer " + admin))
+                        .header("Authorization", "Bearer " + admin)
+                        .header("If-Match", "\"7\""))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value(40900));
 
         org.mockito.Mockito.doThrow(AnnouncementApiException.unprocessable("invalid transition"))
-                .when(announcements).archive(5L, 9L);
+                .when(announcements).archive(5L, 7L, 9L);
         mvc.perform(post("/v1/admin/announcements/5/archive")
-                        .header("Authorization", "Bearer " + admin))
+                        .header("Authorization", "Bearer " + admin)
+                        .header("If-Match", "\"7\""))
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.code").value(42200));
+    }
+
+    @Test
+    void malformedQueryJsonAndMissingVersionAreBadRequests() throws Exception {
+        mvc.perform(get("/v1/announcements").param("page", "abc"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(40000));
+
+        String admin = tokens.createToken(9L, "admin", List.of("ADMIN"));
+        mvc.perform(post("/v1/admin/announcements/4/schedule")
+                        .header("Authorization", "Bearer " + admin)
+                        .header("If-Match", "\"7\"")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"publishAt\":\"not-an-instant\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(40000));
+        mvc.perform(post("/v1/admin/announcements/4/archive")
+                        .header("Authorization", "Bearer " + admin))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(40000));
     }
 
     private AnnouncementService.PublicAnnouncement publicAnnouncement() {

@@ -6,12 +6,15 @@ import com.zephyr.croj.common.response.Result;
 import com.zephyr.croj.contest.ContestApiException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.validation.BindException;
 import org.springframework.validation.BindingResult;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.ServletRequestBindingException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -111,6 +114,17 @@ public class GlobalExceptionHandler {
         String message = !errorMsg.isEmpty() ? errorMsg.substring(0, errorMsg.length() - 2) : "参数错误";
         log.error("参数绑定异常: {}", message);
         return Result.error(ResultCodeEnum.PARAM_ERROR.getCode(), message);
+    }
+
+    @ExceptionHandler({
+        HttpMessageNotReadableException.class,
+        MethodArgumentTypeMismatchException.class,
+        ServletRequestBindingException.class
+    })
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public Result<Void> handleMalformedRequest(Exception exception) {
+        log.warn("请求格式错误: {}", exception.getMessage());
+        return Result.error(ResultCodeEnum.PARAM_ERROR.getCode(), "请求格式错误");
     }
 
     /**

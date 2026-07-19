@@ -29,7 +29,7 @@ Page size is capped at 100 and current-feed limit at 20. Public ordering is pinn
 
 ## Data and concurrency
 
-`t_announcement` stores scope, lifecycle, Markdown content, pin controls, publication window, creator/updater/publisher audit ids, timestamps, archive timestamp, and an optimistic `version`. Mutations use compare-and-set updates on lifecycle/version so concurrent administrative actions cannot silently overwrite each other.
+`t_announcement` stores scope, lifecycle, Markdown content, pin controls, publication window, creator/updater/publisher audit ids, timestamps, archive timestamp, and an optimistic `version`. Every mutation requires the client's quoted `If-Match` version and uses it in a compare-and-set update, so concurrent administrative actions cannot silently overwrite each other.
 
 ## Security and errors
 

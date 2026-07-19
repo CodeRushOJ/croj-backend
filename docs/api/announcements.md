@@ -36,6 +36,14 @@ publishAt <= now && (expiresAt == null || now < expiresAt)
 | `POST` | `/api/v1/admin/announcements/{id}/withdraw` | 把排期/已发布公告撤回草稿并清空发布窗口 |
 | `POST` | `/api/v1/admin/announcements/{id}/archive` | 归档；归档后不可修改或重新发布 |
 
+除创建和列表外，所有管理变更必须携带管理列表返回的 `version`：
+
+```http
+If-Match: "7"
+```
+
+服务端直接以该客户端版本执行 compare-and-set。若另一个管理员已经修改公告，旧版本请求返回 HTTP 409，客户端必须重新获取公告后再决定是否覆盖；服务端不会用刚读取的最新版本替客户端静默覆盖。
+
 草稿请求：
 
 ```json
@@ -47,7 +55,7 @@ publishAt <= now && (expiresAt == null || now < expiresAt)
 }
 ```
 
-标题不能为空且最多 200 字符，Markdown 不能为空且最多 100,000 字符，`pinOrder` 范围为 `0..10000`。创建、更新、发布和归档管理员分别写入审计字段；修改语句使用数据库版本比较，两个管理员并发覆盖时后到请求返回 HTTP 409。
+标题不能为空且最多 200 字符，Markdown 不能为空且最多 100,000 字符，`pinOrder` 范围为 `0..10000`。创建、更新、发布和归档管理员分别写入审计字段。
 
 排期请求：
 
@@ -70,7 +78,7 @@ publishAt <= now && (expiresAt == null || now < expiresAt)
 
 | HTTP | 业务码 | 场景 |
 | --- | --- | --- |
-| `400` | `40000` | Bean Validation、未知状态过滤器、非法分页参数 |
+| `400` | `40000` | Bean Validation、未知状态过滤器、非法分页类型、非法 JSON/Instant、缺少或错误的 `If-Match` |
 | `401` | `40100` | 管理请求没有有效 JWT |
 | `403` | `40300` | 登录用户不是管理员 |
 | `404` | `40400` | 公告不存在，或公告对公开请求不可见 |

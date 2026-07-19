@@ -15,6 +15,11 @@ REPOSITORY_ROOT="$(pwd -P)"
 readonly REPOSITORY_ROOT
 readonly MAVEN_CACHE_DIR="${MAVEN_CACHE_DIR:-$REPOSITORY_ROOT/.cache/maven}"
 
+FLYWAY_VERSION="$(sed -n 's:^[[:space:]]*<flyway.version>\([^<]*\)</flyway.version>[[:space:]]*$:\1:p' pom.xml)"
+readonly FLYWAY_VERSION
+MYSQL_CONNECTOR_VERSION="$(sed -n 's:^[[:space:]]*<mysql.version>\([^<]*\)</mysql.version>[[:space:]]*$:\1:p' pom.xml)"
+readonly MYSQL_CONNECTOR_VERSION
+
 container_started=false
 network_started=false
 
@@ -64,6 +69,8 @@ run_flyway() {
     ./mvnw --file scripts/migration-gate/pom.xml \
     --batch-mode --no-transfer-progress \
     -Dmaven.repo.local=/maven-cache \
+    -Dflyway.version="$FLYWAY_VERSION" \
+    -Dmysql.version="$MYSQL_CONNECTOR_VERSION" \
     -Dflyway.url="jdbc:mysql://${CONTAINER_NAME}:3306/${MYSQL_DATABASE}?allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=UTC" \
     -Dflyway.user="$MYSQL_USER" \
     -Dflyway.password="$MYSQL_PASSWORD" \
@@ -76,6 +83,8 @@ trap cleanup EXIT INT TERM
 
 command -v docker >/dev/null 2>&1 || fail "docker is required"
 [[ -x ./mvnw ]] || fail "run this script from the repository root"
+[[ -n "$FLYWAY_VERSION" ]] || fail "pom.xml must pin flyway.version for the migration gate"
+[[ -n "$MYSQL_CONNECTOR_VERSION" ]] || fail "pom.xml must pin mysql.version for the migration gate"
 [[ "$MYSQL_START_TIMEOUT_SECONDS" =~ ^[1-9][0-9]*$ ]] || \
   fail "MYSQL_START_TIMEOUT_SECONDS must be a positive integer"
 

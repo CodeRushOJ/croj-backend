@@ -9,12 +9,6 @@
     <version>1.0.0</version>
     <packaging>pom</packaging>
 
-    <!-- Keep these versions aligned with Spring Boot 3.5.16 dependency management. -->
-    <properties>
-        <flyway.version>11.7.2</flyway.version>
-        <mysql.version>9.7.0</mysql.version>
-    </properties>
-
     <build>
         <plugins>
             <plugin>

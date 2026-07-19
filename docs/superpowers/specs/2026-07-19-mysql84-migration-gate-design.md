@@ -6,7 +6,7 @@
 
 ## Decision
 
-Add one repository-owned Bash verifier that exercises the real upgrade path against an ephemeral, digest-pinned MySQL 8.4 container. The verifier will use Flyway's Maven plugin with the same Flyway version managed by Spring Boot, migrate a clean database to V6, insert a representative legacy forum post, and then migrate to V7.
+Add one repository-owned Bash verifier that exercises the real upgrade path against an ephemeral, digest-pinned MySQL 8.4 container. The verifier runs Flyway's Maven plugin from a small, isolated gate POM pinned to the same Flyway and MySQL Connector versions managed by Spring Boot, migrates a clean database to V6, inserts a representative legacy forum post, and then migrates to V7. Keeping the gate POM separate prevents a schema check from resolving the backend's entire runtime dependency graph.
 
 After migration it will query MySQL directly from inside the database container and assert:
 
@@ -17,7 +17,7 @@ After migration it will query MySQL directly from inside the database container 
 - A valid problem-associated post is accepted.
 - An invalid `GENERAL` post with a non-null `resource_id` is rejected by MySQL.
 
-The script owns container startup, readiness, credentials, port allocation, and cleanup. It exposes a small set of environment overrides for diagnosis, while secure throwaway defaults make the documented command simply `scripts/verify-mysql-migrations.sh`.
+The script owns a private Docker network, MySQL and Java container startup, readiness, credentials, Maven caching, and cleanup. It exposes a small set of environment overrides for diagnosis, while secure throwaway defaults make the documented command simply `scripts/verify-mysql-migrations.sh`. Neither Java nor a MySQL client is required on the host.
 
 ## Alternatives Considered
 
@@ -36,4 +36,3 @@ Published migrations remain immutable. This change does not start the applicatio
 ## Failure Behavior
 
 The verifier fails fast with a named assertion, retains no database after exit, and prints the MySQL container logs when startup fails. Expected constraint rejection is captured explicitly so its diagnostic does not pollute successful CI output. Unexpected successful invalid writes fail the build.
-

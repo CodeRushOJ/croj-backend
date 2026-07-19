@@ -1,0 +1,59 @@
+name: MySQL migration gate
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/mysql-migrations.yml
+      - .mvn/**
+      - mvnw
+      - pom.xml
+      - scripts/migration-gate/**
+      - scripts/verify-mysql-migrations.sh
+      - src/main/resources/db/migration/**
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/mysql-migrations.yml
+      - .mvn/**
+      - mvnw
+      - pom.xml
+      - scripts/migration-gate/**
+      - scripts/verify-mysql-migrations.sh
+      - src/main/resources/db/migration/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mysql-migrations-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  flyway-upgrade:
+    name: Flyway V1-V7 on MySQL 8.4
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      MYSQL_IMAGE: mysql:8.4.10@sha256:c831a0f11348d402b43d77453e17d770be2eef356615a2823fe0f5a0d6c8b9af
+      MAVEN_IMAGE: maven:3.9-eclipse-temurin-17@sha256:1ed5d1f54416b706707b4f3238f63a20bb06aab27c6d240090a2bb9ad895ed45
+      MAVEN_CACHE_DIR: ${{ github.workspace }}/.cache/maven
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Restore migration-gate Maven cache
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4
+        with:
+          path: .cache/maven
+          key: mysql-migration-maven-${{ runner.os }}-${{ hashFiles('scripts/migration-gate/pom.xml', '.mvn/wrapper/maven-wrapper.properties') }}
+          restore-keys: |
+            mysql-migration-maven-${{ runner.os }}-
+
+      - name: Validate migration verifier shell
+        run: shellcheck scripts/verify-mysql-migrations.sh
+
+      - name: Upgrade legacy V1-V6 data through V7
+        run: scripts/verify-mysql-migrations.sh

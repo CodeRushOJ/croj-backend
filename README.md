@@ -22,6 +22,16 @@ Spring Boot 业务 API，当前覆盖身份、用户、题目、标签、提交�
 
 Flyway 在应用启动时按顺序执行 `src/main/resources/db/migration` 中的生产迁移；`dev` Profile 额外加载可重复执行的标签与论坛分类种子。已经发布的版本迁移不可修改，结构变更必须新增更高版本迁移。
 
+提交数据库迁移前必须运行真实 MySQL 兼容门禁：
+
+```bash
+scripts/verify-mysql-migrations.sh
+```
+
+该命令只要求 Docker，不要求宿主机安装 Java、Maven 或 MySQL 客户端。脚本在私有 Docker network 中启动一次性 MySQL 8.4.10 和 Java 容器，先用 Flyway 将空库迁到 V6，写入旧版论坛数据，再升级到 V7；随后验证 V1-V7 历史、旧帖 `GENERAL/NULL` 回填、`CHECK` 约束、复合索引顺序及非法 `GENERAL + resource_id` 写入被数据库拒绝。脚本退出时自动删除数据库容器与 network，Maven 依赖保存在被 Git 忽略的 `.cache/maven`。
+
+CI 使用 digest 固定的 MySQL 8.4.10 与 Java 镜像。排查镜像代理或预拉取问题时，可临时通过 `MYSQL_IMAGE`、`MAVEN_IMAGE`、`MAVEN_CACHE_DIR` 和 `MYSQL_START_TIMEOUT_SECONDS` 覆盖默认值；这些变量只控制一次性测试环境，不能用于传入生产凭据。
+
 提交请求不会在数据库事务内直接访问 RocketMQ。后端在同一事务中写入提交记录、首次判题 attempt、题目提交计数和 `SubmissionRequested` Outbox 事件。后台发布器逐条 claim 并投递包含稳定 `eventId`、`submissionId`、`attemptNo`、语言等字段的 v1 JSON 事件。Broker 暂时不可用时按指数退避重试；后端异常退出留下的 claim 会在租约过期后由其他副本恢复。
 
 Outbox 参数可通过 `.env.example` 中的 `OUTBOX_*` 变量覆盖。`OUTBOX_CLAIM_TIMEOUT` 必须至少是 `OUTBOX_PUBLISH_TIMEOUT` 的两倍，默认分别为 30 秒和 5 秒；不满足约束时应用拒绝启动，避免多副本在消息尚未发送完成时重复抢占。

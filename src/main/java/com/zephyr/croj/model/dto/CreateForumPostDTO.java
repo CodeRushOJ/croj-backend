@@ -12,6 +12,7 @@ import lombok.Data;
 public class CreateForumPostDTO {
     @NotNull @Positive
     private Long categoryId;
+    @NotNull
     private ForumResourceType resourceType = ForumResourceType.GENERAL;
     @Positive
     private Long resourceId;

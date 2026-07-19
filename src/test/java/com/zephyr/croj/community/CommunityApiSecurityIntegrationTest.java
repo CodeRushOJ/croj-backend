@@ -96,4 +96,24 @@ class CommunityApiSecurityIntegrationTest {
                         .content(body))
                 .andExpect(status().isBadRequest());
     }
+
+    @Test
+    void discussionCreationRejectsAnExplicitNullResourceType() throws Exception {
+        String token = tokens.createToken(7L, "ada", List.of("USER"));
+        String body = """
+                {
+                  "categoryId":1,
+                  "resourceType":null,
+                  "resourceId":11,
+                  "title":"A useful post",
+                  "contentMarkdown":"Details"
+                }
+                """;
+
+        mvc.perform(post("/v1/forum/posts")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isBadRequest());
+    }
 }

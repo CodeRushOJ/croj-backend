@@ -44,4 +44,3 @@ AWS S3 可省略 `TEST_BUNDLE_S3_ENDPOINT` 并按部署区域设置 `AWS_REGION`
 5. `ProblemVersionPublicationService` 锁定版本与测试包，原子更新版本为 `PUBLISHED`、题目 `published_version_id` 和公开状态。
 
 对象写入成功、数据库事务失败时可能留下不可达的内容寻址对象，后续可由 GC 清理；系统不会因此产生已发布但不可判的版本。`/api/v1/admin/problem-imports/preflight` 只做解析与校验，`/{jobId}/commit` 必须复用上述步骤并在全部题目成功后返回 `importedCount`。
-

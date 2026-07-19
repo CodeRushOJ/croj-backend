@@ -28,4 +28,3 @@ Limits are configured and validated before upload. The manifest must be a JSON o
 3. the stored object key is content-addressed by the recorded SHA-256.
 
 Submission and contest publication continue to enforce this invariant through their existing judge-ready queries.
-

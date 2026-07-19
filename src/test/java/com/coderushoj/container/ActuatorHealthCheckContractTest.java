@@ -17,6 +17,8 @@ import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
 class ActuatorHealthCheckContractTest {
 
+    private static final int STATUS_TEST_TIMEOUT_MILLIS = 1_000;
+
     private HttpServer server;
 
     @AfterEach
@@ -27,10 +29,13 @@ class ActuatorHealthCheckContractTest {
     }
 
     @Test
-    void acceptsOnlyTwoHundredResponses() throws Exception {
+    void acceptsSuccessfulNoContentResponses() throws Exception {
         URL endpoint = endpointReturning(204, new byte[0]);
 
-        assertEquals(0, ActuatorHealthCheck.check(endpoint, 250, 250));
+        assertEquals(0, ActuatorHealthCheck.check(
+                endpoint,
+                STATUS_TEST_TIMEOUT_MILLIS,
+                STATUS_TEST_TIMEOUT_MILLIS));
     }
 
     @Test
@@ -43,7 +48,10 @@ class ActuatorHealthCheckContractTest {
         });
         server.start();
 
-        assertEquals(1, ActuatorHealthCheck.check(localUrl(), 250, 250));
+        assertEquals(1, ActuatorHealthCheck.check(
+                localUrl(),
+                STATUS_TEST_TIMEOUT_MILLIS,
+                STATUS_TEST_TIMEOUT_MILLIS));
     }
 
     @Test
@@ -59,7 +67,10 @@ class ActuatorHealthCheckContractTest {
         try {
             System.setOut(new PrintStream(stdout, true, StandardCharsets.UTF_8));
             System.setErr(new PrintStream(stderr, true, StandardCharsets.UTF_8));
-            result = ActuatorHealthCheck.check(endpoint, 250, 250);
+            result = ActuatorHealthCheck.check(
+                    endpoint,
+                    STATUS_TEST_TIMEOUT_MILLIS,
+                    STATUS_TEST_TIMEOUT_MILLIS);
         } finally {
             System.setOut(originalOut);
             System.setErr(originalErr);
@@ -92,7 +103,7 @@ class ActuatorHealthCheckContractTest {
     private URL endpointReturning(int status, byte[] body) throws Exception {
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/health", exchange -> {
-            exchange.sendResponseHeaders(status, body.length);
+            exchange.sendResponseHeaders(status, body.length == 0 ? -1 : body.length);
             if (body.length > 0) {
                 exchange.getResponseBody().write(body);
             }

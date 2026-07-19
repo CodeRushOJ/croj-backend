@@ -50,4 +50,3 @@ public class TestBundleStorageConfig {
         return new TestBundleService(bundles, versions, storage, objectMapper, properties);
     }
 }
-

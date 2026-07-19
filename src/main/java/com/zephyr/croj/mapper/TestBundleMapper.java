@@ -11,4 +11,3 @@ public interface TestBundleMapper extends BaseMapper<TestBundle> {
     @Select("SELECT * FROM t_test_bundle WHERE problem_version_id=#{versionId}")
     TestBundle findByProblemVersionId(@Param("versionId") long versionId);
 }
-

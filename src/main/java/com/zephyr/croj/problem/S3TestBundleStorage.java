@@ -24,4 +24,3 @@ public class S3TestBundleStorage implements TestBundleStorage {
         s3.putObject(request, RequestBody.fromBytes(archive));
     }
 }
-

@@ -20,4 +20,3 @@ public class TestBundle {
     @TableField("created_at")
     private LocalDateTime createdAt;
 }
-

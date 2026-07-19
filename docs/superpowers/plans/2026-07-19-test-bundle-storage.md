@@ -7,4 +7,3 @@
 5. Change ordinary problem snapshots to remain draft until the publication gate is called.
 6. Document S3/MinIO environment variables and import preflight/commit integration.
 7. Run focused tests, full Maven tests and migration contracts; commit and open a stacked draft PR against Contest Core.
-

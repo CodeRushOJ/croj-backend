@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 
 # Docker Official Image, multi-platform index (linux/amd64 and linux/arm64).
-FROM maven:3.9.16-eclipse-temurin-17-alpine@sha256:22ab50236eec4106ef19d86c0268c0adfac6a2051a3f5d473a315a3ab77c619f AS builder
+FROM maven:3.9-eclipse-temurin-17@sha256:1ed5d1f54416b706707b4f3238f63a20bb06aab27c6d240090a2bb9ad895ed45 AS builder
 
 WORKDIR /workspace
 

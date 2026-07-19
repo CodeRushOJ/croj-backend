@@ -13,6 +13,7 @@ Spring Boot 业务 API，当前覆盖身份、用户、题目、标签、提交�
 - `JWT_SECRET`（至少 32 个随机字节）
 - `JUDGE_RESULT_SERVICE_TOKEN`（至少 32 个随机字节，仅判题服务与后端持有）
 - `SMTP_PASSWORD`
+- `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`（MinIO/S3 私有隐藏测试桶）
 
 数据库地址、用户名、SMTP 和 RocketMQ 地址也可以通过 `.env.example` 中的变量覆盖。`.env` 与 `.env.*` 默认被 Git 忽略，`.env.example` 只保留无效占位值。
 
@@ -29,6 +30,8 @@ Outbox 参数可通过 `.env.example` 中的 `OUTBOX_*` 变量覆盖。`OUTBOX_C
 竞赛核心支持公开/私有比赛、报名名单、严格赛时题目可见性、公告、私密/公开澄清、固定题目版本的比赛提交，以及带封榜的 ACM 排名。比赛只持久化 `DRAFT/PUBLISHED/CANCELLED`，运行阶段按时间推导；冻结/最终快照只是可丢弃缓存，提交记录始终是真相源。接口、时间边界、权限和计分规则见 [`docs/api/contests.md`](docs/api/contests.md)。
 
 论坛帖子、评论与题解的删除是状态迁移而非物理删除；公开查询只返回 `PUBLISHED`。题解记录发布时的 `problem_version_id`，确保题目后续更新不会改变历史题解所对应的题面。客户端只提交 Markdown，`content_html` 由服务端生成安全转义内容，禁止客户端注入 HTML。
+
+题目创建和编辑只生成私有 `DRAFT` 版本，不再直接公开。导入或管理流程先把规范化隐藏测试绑定为 `TestBundle`，后端以 SHA-256 生成 `test-bundles/{problemId}/{versionId}/{sha256}.zip` 对象键并写入私有 S3/MinIO 桶，随后才可通过发布门禁原子设置 `PUBLISHED` 与 `published_version_id`。配置、manifest 约束和故障模型见 [`docs/api/test-bundles.md`](docs/api/test-bundles.md)。
 
 ## 测试
 

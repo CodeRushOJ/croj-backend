@@ -1,9 +1,11 @@
 package com.zephyr.croj.community;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.when;
 
 import com.baomidou.mybatisplus.core.conditions.Wrapper;
@@ -43,7 +45,7 @@ class ProblemVersionPublishingTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    void creatingAPublicProblemAlsoPublishesAnImmutableVersion() {
+    void creatingAProblemKeepsTheVersionPrivateUntilATestBundleIsAttached() {
         User admin = new User();
         admin.setId(2L);
         admin.setRole(1);
@@ -57,7 +59,6 @@ class ProblemVersionPublishingTest {
             invocation.<ProblemVersion>getArgument(0).setId(23L);
             return 1;
         });
-        when(problems.updateById(any(Problem.class))).thenReturn(1);
         ProblemCreateDTO request = new ProblemCreateDTO();
         request.setTitle("Two Sum");
         request.setDescription("Find two values.");
@@ -75,11 +76,13 @@ class ProblemVersionPublishingTest {
 
         ArgumentCaptor<ProblemVersion> version = ArgumentCaptor.forClass(ProblemVersion.class);
         verify(versions).insert(version.capture());
-        assertEquals("PUBLISHED", version.getValue().getState());
+        assertEquals("DRAFT", version.getValue().getState());
         assertEquals(1, version.getValue().getVersionNo());
         assertEquals(11L, version.getValue().getProblemId());
-        ArgumentCaptor<Problem> updatedProblem = ArgumentCaptor.forClass(Problem.class);
-        verify(problems).updateById(updatedProblem.capture());
-        assertEquals(23L, updatedProblem.getValue().getPublishedVersionId());
+        ArgumentCaptor<Problem> insertedProblem = ArgumentCaptor.forClass(Problem.class);
+        verify(problems).insert(insertedProblem.capture());
+        assertEquals(1, insertedProblem.getValue().getStatus());
+        assertNull(insertedProblem.getValue().getPublishedVersionId());
+        verify(problems, never()).updateById(any(Problem.class));
     }
 }

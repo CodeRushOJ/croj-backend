@@ -35,6 +35,12 @@ Outbox 参数可通过 `.env.example` 中的 `OUTBOX_*` 变量覆盖。`OUTBOX_C
 
 题目创建和编辑只生成私有 `DRAFT` 版本，不再直接公开。导入或管理流程先把规范化隐藏测试绑定为 `TestBundle`，后端以 SHA-256 生成 `test-bundles/{problemId}/{versionId}/{sha256}.zip` 对象键并写入私有 S3/MinIO 桶，随后才可通过发布门禁原子设置 `PUBLISHED` 与 `published_version_id`。配置、manifest 约束和故障模型见 [`docs/api/test-bundles.md`](docs/api/test-bundles.md)。
 
+### 题目包导入
+
+题目导入使用 `ProblemPackageParser` SPI 将外部格式转换成统一的 `ProblemImportDraft`，后续再由预检作业创建草稿版本和测试包。首个解析器准确面向 [FreeProblemSet](https://github.com/zhblue/freeproblemset/tree/master) FPS XML 1.1/1.2/1.4，兼容题面、时/内存单位、多样例、隐藏测试、图片、标准解、代码模板、SPJ/TPJ/Interactor 和远程题目标识。
+
+FPS XML 使用 StAX 流式读取。解析器只接受 FreeProblemSet 官方 PUBLIC DOCTYPE 声明，但始终禁用 DTD 解析、外部实体与网络访问；包含内部实体或其他 DTD 的文件会被拒绝。文本、题目数、测试数和内嵌图片均有硬上限。导入的标准解与裁判程序只作为待审核资源保存，解析阶段绝不执行。兼容性测试包含 FreeProblemSet 上游提交 `7782b3815fd40f5bba95b5d7b90e3fbefafae656` 的真实 `fps-zhblue-A+B.xml`，覆盖其 1.4 版本、PUBLIC DOCTYPE 与测试点排列。后续解析器通过同一 SPI 增加 CodeRush 原生包、ICPC problem package 和 Polygon package，不在一个解析器内堆叠格式判断。
+
 ## 测试
 
 不需要在宿主机安装 Java。使用 Java 17 容器和持久化 Maven 缓存运行：
@@ -53,3 +59,74 @@ docker run --rm \
 ```
 
 生产部署由 `croj-platform` 固定镜像、注入 Kubernetes Secret 并运行跨仓库验收。不要把真实凭据写回 `application*.yml`。
+
+<a id="production-container"></a>
+## Production container（生产容器）
+
+生产 Dockerfile 使用 Maven/JDK 17 builder 和 Distroless Java 17 Debian 13 runtime。两个基础镜像都固定 multi-platform OCI index digest；runtime 只包含 Java 运行时、`croj.jar` 与一个本机 Actuator 检查 class，不包含源码、Maven、JDK compiler、shell 或包管理器。
+
+| 阶段 | 固定引用 | 目标平台 |
+| --- | --- | --- |
+| builder | `maven:3.9-eclipse-temurin-17@sha256:1ed5d1f54416b706707b4f3238f63a20bb06aab27c6d240090a2bb9ad895ed45` | `linux/amd64`, `linux/arm64` |
+| runtime | `gcr.io/distroless/java17-debian13:nonroot@sha256:81d09cac6ec47f6a13c61a941557f95079213320f3ddbf9d353de9317669aab5` | `linux/amd64`, `linux/arm64` |
+
+核验 index digest 与平台，不要把输出中的某个单平台 manifest digest 误写成 multi-platform base：
+
+```bash
+docker buildx imagetools inspect --raw \
+  'maven:3.9-eclipse-temurin-17@sha256:1ed5d1f54416b706707b4f3238f63a20bb06aab27c6d240090a2bb9ad895ed45' |
+  jq -r '.manifests[].platform | "\(.os)/\(.architecture)"'
+
+docker buildx imagetools inspect --raw \
+  'gcr.io/distroless/java17-debian13:nonroot@sha256:81d09cac6ec47f6a13c61a941557f95079213320f3ddbf9d353de9317669aab5' |
+  jq -r '.manifests[].platform | "\(.os)/\(.architecture)"'
+```
+
+### 本地构建与离线检查
+
+macOS 上可用 Homebrew 安装仓库验收工具；Docker、Buildx 与 Java 17 测试容器仍按前文准备：
+
+```bash
+brew install shellcheck actionlint
+brew install anchore/syft/syft aquasecurity/trivy/trivy
+```
+
+构建可供本机检查的镜像。BuildKit cache 只缓存 Maven 依赖，不会复制到 runtime：
+
+```bash
+docker buildx build --load \
+  --build-arg "VCS_REF=$(git rev-parse HEAD)" \
+  --build-arg "VERSION=0.4.0-rc.1" \
+  --build-arg "BUILD_DATE=$(git show -s --format=%cI HEAD)" \
+  --tag coderushoj/croj-backend:local .
+
+shellcheck tests/container/*.sh
+tests/container/production-image-contract.sh
+tests/container/inspect-production-image.sh coderushoj/croj-backend:local
+```
+
+`inspect-production-image.sh` 只调用 `docker image inspect`、`docker create` 和 `docker export`；created container 从未 start，脚本退出时会删除，因此不会启动 Spring Boot 或访问数据库、Redis、RocketMQ、SMTP。
+
+生成带最大 provenance 和 BuildKit SBOM attestation 的 OCI archive，并额外输出可下载的 SPDX JSON：
+
+```bash
+docker buildx build \
+  --provenance=mode=max \
+  --sbom=true \
+  --output type=oci,dest=target/croj-backend.oci.tar .
+
+syft coderushoj/croj-backend:local -o spdx-json=target/croj-backend.spdx.json
+trivy image --severity HIGH,CRITICAL --exit-code 1 coderushoj/croj-backend:local
+```
+
+Trivy 不使用 `--ignore-unfixed` 或默认 ignore file；任何 HIGH/CRITICAL 都必须在升级依赖或基础镜像后重新验证，不能通过把 exit code 改成 0 绕过。CI 同时上传 SARIF 和 SPDX artifact，并以阻断扫描作为最终结果。
+
+### Kubernetes 运行合同
+
+- 镜像固定 `USER 65532:65532`、`EXPOSE 7999` 和 `SPRING_PROFILES_ACTIVE=prod`；ENTRYPOINT 直接 exec `/usr/bin/java`，SIGTERM 能到达 Spring Boot。
+- OCI healthcheck 只请求 `http://127.0.0.1:7999/api/actuator/health/liveness`，连接/读取各超时 1 秒，不跟随重定向、不读取响应体，只有 2xx 成功。Kubernetes startup/readiness 使用 `/api/actuator/health/readiness`。
+- 根文件系统按只读运行。`/tmp` 必须挂 `emptyDir`；`TMPDIR=/tmp` 同时承载 JVM 和 multipart 临时文件。
+- `/app/uploads` 必须显式挂载；开发环境可以使用可丢弃 `emptyDir`，production 必须使用管理员预建的 RWX PVC。`FILE_UPLOAD_DIR=/app/uploads`，镜像不声明匿名 `VOLUME`。
+- `prod` Profile 启用 graceful shutdown，phase timeout 为 30 秒，与 `croj-platform` 的 `terminationGracePeriodSeconds: 30` 一致。
+
+构建并推送 GHCR 镜像后，production Helm values 必须使用 registry 返回的 image digest，不使用可漂移 tag。Secret、RWX PVC、离线预检和回滚命令以 `croj-platform/docs/guide/application-deployment.md` 为准。

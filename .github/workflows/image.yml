@@ -1,0 +1,129 @@
+name: Backend production image
+
+on:
+  pull_request:
+    paths:
+      - Dockerfile
+      - .dockerignore
+      - pom.xml
+      - .mvn/**
+      - mvnw
+      - src/**
+      - tests/container/**
+      - .github/workflows/image.yml
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  production-image:
+    name: Build, inspect, SBOM, and scan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Validate shell and static container contracts
+        run: |
+          shellcheck tests/container/*.sh
+          tests/container/production-image-contract.sh
+
+      - name: Verify pinned base indexes support amd64 and arm64
+        env:
+          BUILDER_BASE: maven:3.9-eclipse-temurin-17@sha256:1ed5d1f54416b706707b4f3238f63a20bb06aab27c6d240090a2bb9ad895ed45
+          RUNTIME_BASE: gcr.io/distroless/java17-debian13:nonroot@sha256:81d09cac6ec47f6a13c61a941557f95079213320f3ddbf9d353de9317669aab5
+        run: |
+          for image in "$BUILDER_BASE" "$RUNTIME_BASE"; do
+            manifest="$(docker buildx imagetools inspect --raw "$image")"
+            printf '%s\n' "$image"
+            jq -r '.manifests[]?.platform | select(.os != "unknown") | "  \(.os)/\(.architecture)"' <<<"$manifest"
+            jq -e '
+              ([.manifests[]?.platform | "\(.os)/\(.architecture)"] | index("linux/amd64")) != null and
+              ([.manifests[]?.platform | "\(.os)/\(.architecture)"] | index("linux/arm64")) != null
+            ' <<<"$manifest" >/dev/null
+          done
+
+      - name: Derive immutable image metadata
+        id: metadata
+        run: |
+          printf 'created=%s\n' "$(git show -s --format=%cI HEAD)" >> "$GITHUB_OUTPUT"
+          printf 'version=%s\n' "${GITHUB_REF_NAME:-0.0.1-SNAPSHOT}" >> "$GITHUB_OUTPUT"
+
+      - name: Build inspection image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          load: true
+          tags: coderushoj/croj-backend:${{ github.sha }}
+          build-args: |
+            VCS_REF=${{ github.sha }}
+            VERSION=${{ steps.metadata.outputs.version }}
+            BUILD_DATE=${{ steps.metadata.outputs.created }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Inspect stopped image root filesystem
+        run: tests/container/inspect-production-image.sh "coderushoj/croj-backend:${GITHUB_SHA}"
+
+      - name: Produce attested OCI image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          outputs: type=oci,dest=${{ runner.temp }}/croj-backend.oci.tar
+          build-args: |
+            VCS_REF=${{ github.sha }}
+            VERSION=${{ steps.metadata.outputs.version }}
+            BUILD_DATE=${{ steps.metadata.outputs.created }}
+          cache-from: type=gha
+          provenance: mode=max
+          sbom: true
+
+      - name: Generate SPDX SBOM with Syft
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0
+        with:
+          image: coderushoj/croj-backend:${{ github.sha }}
+          format: spdx-json
+          output-file: sbom.spdx.json
+          upload-artifact: false
+
+      - name: Upload SPDX SBOM
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: backend-sbom-${{ github.sha }}
+          path: sbom.spdx.json
+          if-no-files-found: error
+
+      - name: Generate Trivy SARIF report
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: coderushoj/croj-backend:${{ github.sha }}
+          format: sarif
+          output: trivy-results.sarif
+          severity: HIGH,CRITICAL
+          exit-code: "0"
+
+      - name: Upload Trivy SARIF
+        if: ${{ always() && hashFiles('trivy-results.sarif') != '' }}
+        uses: github/codeql-action/upload-sarif@7188fc363630916deb702c7fdcf4e481b751f97a # v4
+        with:
+          sarif_file: trivy-results.sarif
+
+      - name: Fail on HIGH or CRITICAL vulnerabilities
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: coderushoj/croj-backend:${{ github.sha }}
+          format: table
+          severity: HIGH,CRITICAL
+          exit-code: "1"

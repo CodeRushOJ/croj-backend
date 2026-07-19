@@ -10,6 +10,12 @@
 - 全局公告公开分页、当前公告和详情 API，严格按 UTC 发布窗口过滤并支持稳定置顶顺序。
 - 公告管理端草稿、未来排期、立即发布、撤回、归档和全生命周期筛选 API。
 - V6 公告迁移、管理员创建/更新/发布审计和基于客户端 `If-Match` 版本的并发覆盖保护。
+- 可扩展 `ProblemPackageParser` 题目导入模型与 FreeProblemSet FPS XML 1.1/1.2/1.4 流式解析器，规范化限制单位、样例、隐藏测试、图片和可选代码资源。
+- FPS 解析契约测试覆盖真实上游 1.4 题包、完整字段映射、版本拒绝、分组测试点配对以及 XXE/非官方 DTD fail-closed 行为。
+- 生产后端镜像：digest 固定的 Maven/JDK 17 builder、Distroless Java 17 runtime、BuildKit 依赖缓存和 OCI provenance/SBOM。
+- shell-free Actuator liveness healthcheck，严格 localhost、连接/读取超时、不跟随重定向且不读取响应体。
+- 容器静态合同与 stopped-container rootfs 导出检查；验证 non-root UID/GID 65532、端口、prod Profile 及 runtime 不含源码/Maven/compiler/shell/package manager。
+- GitHub Actions 镜像门禁：Syft SPDX artifact、Trivy SARIF，以及不忽略 unfixed 的 HIGH/CRITICAL 阻断扫描。
 - 竞赛核心：公开/私有比赛、报名与托管名单、公告、澄清回复、严格赛时题目可见性。
 - ACM 实时榜、冻结榜和最终榜，稳定 first AC、罚时与独占截止边界。
 - 比赛提交固定编排时的不可变题目版本；冻结/最终榜加入可校验的数据库快照缓存。
@@ -21,9 +27,15 @@
 
 - 论坛列表、详情、评论读取和评论发布统一复核关联资源可见性，阻止通过帖子 ID 访问隐藏题目或未公开比赛。
 - 全局公告写接口仅允许管理员和超级管理员；公开响应不泄漏操作者 ID 或内部版本号。
+- FPS XML 导入只允许官方 PUBLIC DOCTYPE 声明，同时禁用 DTD 解析、外部实体与解析器网络访问；题目、文本、测试点和内嵌图片均有硬上限，导入代码资源不会执行。
+- runtime 使用无 shell/包管理器的 Distroless nonroot 基础镜像，Kubernetes 合同固定只读根文件系统，并只允许挂载 `/tmp` 与 `/app/uploads`。
 - 管理端竞赛接口实施角色校验，阻止跨比赛澄清回复、无效题目版本和幽灵参赛用户。
 - 题目编排与发布使用聚合行锁串行化，避免发布竞态破坏比赛题单。
 - 题目创建和编辑强制先进入 DRAFT，阻止无隐藏测试包的版本绕过门禁公开。
+
+### Changed
+
+- `prod` Profile 的 graceful shutdown phase timeout 固定为 30 秒，并将 multipart 临时目录与上传目录分别对齐 `/tmp`、`/app/uploads`。
 
 ## [0.3.0] - 2026-07-18
 

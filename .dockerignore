@@ -1,0 +1,19 @@
+# The build context is allow-listed below. Explicit exclusions remain visible so
+# repository contract tests and human reviewers can audit the secret boundary.
+**
+.git/
+.github/
+.m2/
+.env
+.env.*
+target/
+uploads/
+docs/
+tests/
+README.md
+CHANGELOG.md
+
+!pom.xml
+!src/
+!src/main/
+!src/main/**

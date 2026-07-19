@@ -106,9 +106,11 @@ container_started=true
 ready=false
 for ((attempt = 1; attempt <= MYSQL_START_TIMEOUT_SECONDS; attempt++)); do
   if docker exec \
-    --env "MYSQL_PWD=$MYSQL_ROOT_PASSWORD" \
+    --env "MYSQL_PWD=$MYSQL_PASSWORD" \
     "$CONTAINER_NAME" \
-    mysqladmin ping --silent --user=root >/dev/null 2>&1; then
+    mysqladmin ping --silent \
+    --protocol=TCP --host=127.0.0.1 --port=3306 \
+    --user="$MYSQL_USER" >/dev/null 2>&1; then
     ready=true
     break
   fi

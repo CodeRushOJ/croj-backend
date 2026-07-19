@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.zephyr.croj.community.ForumResourceType;
 import com.zephyr.croj.security.JwtTokenProvider;
 import com.zephyr.croj.service.CommunityContentService;
 import java.util.List;
@@ -42,7 +43,7 @@ class CommunityApiSecurityIntegrationTest {
 
     @Test
     void publishedForumAndSolutionReadsArePublic() throws Exception {
-        when(content.listPosts(null, 1, 20)).thenReturn(new Page<>());
+        when(content.listPosts(null, ForumResourceType.GENERAL, null, 1, 20)).thenReturn(new Page<>());
         when(content.listSolutions(11L, 1, 20)).thenReturn(new Page<>());
 
         mvc.perform(get("/v1/forum/posts"))
@@ -69,5 +70,30 @@ class CommunityApiSecurityIntegrationTest {
                         .content(body))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data").value(41));
+    }
+
+    @Test
+    void problemDiscussionFiltersRequireAProblemId() throws Exception {
+        mvc.perform(get("/v1/forum/posts").param("resourceType", "PROBLEM"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void problemDiscussionCreationRequiresAProblemId() throws Exception {
+        String token = tokens.createToken(7L, "ada", List.of("USER"));
+        String body = """
+                {
+                  "categoryId":1,
+                  "resourceType":"PROBLEM",
+                  "title":"A useful post",
+                  "contentMarkdown":"Details"
+                }
+                """;
+
+        mvc.perform(post("/v1/forum/posts")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isBadRequest());
     }
 }

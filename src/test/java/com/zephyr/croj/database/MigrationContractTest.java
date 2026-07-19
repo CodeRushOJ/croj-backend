@@ -22,6 +22,8 @@ class MigrationContractTest {
             "src", "main", "resources", "db", "migration", "V5__contest_core.sql");
     private static final Path GLOBAL_ANNOUNCEMENTS = Path.of(
             "src", "main", "resources", "db", "migration", "V6__global_announcements.sql");
+    private static final Path FORUM_RESOURCES = Path.of(
+            "src", "main", "resources", "db", "migration", "V7__forum_resource_associations.sql");
 
     @Test
     void cleanSchemaCoversTheCompleteFreeOjDomain() throws IOException {
@@ -110,5 +112,19 @@ class MigrationContractTest {
         assertTrue(sql.contains("`version` bigint"));
         assertTrue(sql.contains("idx_announcement_public_feed"));
         assertTrue(sql.contains("idx_announcement_admin_feed"));
+    }
+
+    @Test
+    void forumResourcesUseANewForwardOnlyMigration() throws IOException {
+        assertTrue(Files.isRegularFile(FORUM_RESOURCES));
+        String sql = Files.readString(FORUM_RESOURCES).toLowerCase();
+        assertTrue(sql.contains("alter table `t_forum_post`"));
+        assertTrue(sql.contains("`resource_type` varchar(16)"));
+        assertTrue(sql.contains("`resource_id` bigint"));
+        assertTrue(sql.contains("idx_forum_resource_feed"));
+        assertTrue(sql.contains("check"));
+        assertTrue(sql.contains("'general'"));
+        assertTrue(sql.contains("'problem'"));
+        assertTrue(sql.contains("'contest'"));
     }
 }

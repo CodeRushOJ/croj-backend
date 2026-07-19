@@ -14,6 +14,8 @@ public class ForumPost {
     private Long id;
     private Long categoryId;
     private Long authorId;
+    private String resourceType;
+    private Long resourceId;
     private String title;
     private String contentMarkdown;
     private String contentHtml;

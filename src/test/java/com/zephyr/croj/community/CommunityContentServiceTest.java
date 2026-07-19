@@ -4,16 +4,20 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.when;
 
 import com.zephyr.croj.common.exception.BusinessException;
+import com.zephyr.croj.contest.ContestService;
 import com.zephyr.croj.mapper.ForumCategoryMapper;
 import com.zephyr.croj.mapper.ForumCommentMapper;
 import com.zephyr.croj.mapper.ForumPostMapper;
 import com.zephyr.croj.mapper.SolutionMapper;
 import com.zephyr.croj.model.dto.CreateForumPostDTO;
+import com.zephyr.croj.model.dto.CreateForumCommentDTO;
 import com.zephyr.croj.model.dto.PublishSolutionDTO;
 import com.zephyr.croj.model.entity.ForumCategory;
+import com.zephyr.croj.model.entity.ForumComment;
 import com.zephyr.croj.model.entity.ForumPost;
 import com.zephyr.croj.model.entity.Problem;
 import com.zephyr.croj.model.entity.Solution;
@@ -37,12 +41,13 @@ class CommunityContentServiceTest {
     @Mock private SolutionMapper solutions;
     @Mock private UserService users;
     @Mock private ProblemService problems;
+    @Mock private ContestService contests;
 
     private CommunityContentServiceImpl service;
 
     @BeforeEach
     void setUp() {
-        service = new CommunityContentServiceImpl(categories, posts, comments, solutions, users, problems);
+        service = new CommunityContentServiceImpl(categories, posts, comments, solutions, users, problems, contests);
     }
 
     @Test
@@ -126,5 +131,101 @@ class CommunityContentServiceTest {
         request.setContentMarkdown("Disabled account content");
 
         assertThrows(BusinessException.class, () -> service.createPost(request, 7L));
+    }
+
+    @Test
+    void aDiscussionCannotBeAttachedToAnUnpublishedProblem() {
+        User actor = new User();
+        actor.setId(7L);
+        actor.setStatus(0);
+        when(users.getById(7L)).thenReturn(actor);
+        ForumCategory category = new ForumCategory();
+        category.setId(3L);
+        when(categories.selectById(3L)).thenReturn(category);
+        Problem hidden = new Problem();
+        hidden.setId(11L);
+        hidden.setStatus(1);
+        when(problems.getById(11L)).thenReturn(hidden);
+        CreateForumPostDTO request = new CreateForumPostDTO();
+        request.setCategoryId(3L);
+        request.setResourceType(ForumResourceType.PROBLEM);
+        request.setResourceId(11L);
+        request.setTitle("Hidden problem leak");
+        request.setContentMarkdown("This must not be published.");
+
+        assertThrows(BusinessException.class, () -> service.createPost(request, 7L));
+        verify(posts, never()).insert(any(ForumPost.class));
+    }
+
+    @Test
+    void anUnpublishedProblemDiscussionFeedIsNotReadable() {
+        Problem hidden = new Problem();
+        hidden.setId(11L);
+        hidden.setStatus(1);
+        when(problems.getById(11L)).thenReturn(hidden);
+
+        assertThrows(
+                BusinessException.class,
+                () -> service.listPosts(null, ForumResourceType.PROBLEM, 11L, 1, 20));
+        verify(posts, never()).selectPage(any(), any());
+    }
+
+    @Test
+    void aPostCannotBypassItsHiddenProblemThroughTheDetailEndpoint() {
+        ForumPost post = new ForumPost();
+        post.setId(9L);
+        post.setAuthorId(7L);
+        post.setResourceType("PROBLEM");
+        post.setResourceId(11L);
+        post.setStatus("PUBLISHED");
+        when(posts.selectById(9L)).thenReturn(post);
+        Problem hidden = new Problem();
+        hidden.setId(11L);
+        hidden.setStatus(1);
+        when(problems.getById(11L)).thenReturn(hidden);
+
+        assertThrows(BusinessException.class, () -> service.getPost(9L));
+    }
+
+    @Test
+    void commentsCannotBypassAHiddenProblemPost() {
+        ForumPost post = new ForumPost();
+        post.setId(9L);
+        post.setAuthorId(7L);
+        post.setResourceType("PROBLEM");
+        post.setResourceId(11L);
+        post.setStatus("PUBLISHED");
+        when(posts.selectById(9L)).thenReturn(post);
+        Problem hidden = new Problem();
+        hidden.setId(11L);
+        hidden.setStatus(1);
+        when(problems.getById(11L)).thenReturn(hidden);
+
+        assertThrows(BusinessException.class, () -> service.listComments(9L, 1, 30));
+        verify(comments, never()).selectPage(any(), any());
+    }
+
+    @Test
+    void aCommentCannotBePublishedOnAHiddenProblemPost() {
+        User actor = new User();
+        actor.setId(7L);
+        actor.setStatus(0);
+        when(users.getById(7L)).thenReturn(actor);
+        ForumPost post = new ForumPost();
+        post.setId(9L);
+        post.setAuthorId(8L);
+        post.setResourceType("PROBLEM");
+        post.setResourceId(11L);
+        post.setStatus("PUBLISHED");
+        when(posts.selectById(9L)).thenReturn(post);
+        Problem hidden = new Problem();
+        hidden.setId(11L);
+        hidden.setStatus(1);
+        when(problems.getById(11L)).thenReturn(hidden);
+        CreateForumCommentDTO request = new CreateForumCommentDTO();
+        request.setContentMarkdown("This must not be published.");
+
+        assertThrows(BusinessException.class, () -> service.createComment(9L, request, 7L));
+        verify(comments, never()).insert(any(ForumComment.class));
     }
 }

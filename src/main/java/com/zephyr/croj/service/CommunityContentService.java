@@ -1,6 +1,7 @@
 package com.zephyr.croj.service;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.zephyr.croj.community.ForumResourceType;
 import com.zephyr.croj.model.dto.CreateForumCommentDTO;
 import com.zephyr.croj.model.dto.CreateForumPostDTO;
 import com.zephyr.croj.model.dto.PublishSolutionDTO;
@@ -12,7 +13,8 @@ import java.util.List;
 
 public interface CommunityContentService {
     List<ForumCategory> listCategories();
-    IPage<ForumPostVO> listPosts(Long categoryId, long current, long size);
+    IPage<ForumPostVO> listPosts(
+            Long categoryId, ForumResourceType resourceType, Long resourceId, long current, long size);
     ForumPostVO getPost(Long postId);
     long createPost(CreateForumPostDTO request, Long actorId);
     void deletePost(Long postId, Long actorId);

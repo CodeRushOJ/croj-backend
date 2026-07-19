@@ -5,6 +5,8 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.zephyr.croj.common.enums.ResultCodeEnum;
 import com.zephyr.croj.common.exception.BusinessException;
+import com.zephyr.croj.community.ForumResourceType;
+import com.zephyr.croj.contest.ContestService;
 import com.zephyr.croj.mapper.ForumCategoryMapper;
 import com.zephyr.croj.mapper.ForumCommentMapper;
 import com.zephyr.croj.mapper.ForumPostMapper;
@@ -49,6 +51,7 @@ public class CommunityContentServiceImpl implements CommunityContentService {
     private final SolutionMapper solutions;
     private final UserService users;
     private final ProblemService problems;
+    private final ContestService contests;
 
     @Override
     public List<ForumCategory> listCategories() {
@@ -57,10 +60,15 @@ public class CommunityContentServiceImpl implements CommunityContentService {
     }
 
     @Override
-    public IPage<ForumPostVO> listPosts(Long categoryId, long current, long size) {
+    public IPage<ForumPostVO> listPosts(
+            Long categoryId, ForumResourceType resourceType, Long resourceId, long current, long size) {
+        requireReadableResource(resourceType, resourceId, null, false);
         LambdaQueryWrapper<ForumPost> query = new LambdaQueryWrapper<ForumPost>()
                 .eq(ForumPost::getStatus, PUBLISHED)
                 .eq(categoryId != null, ForumPost::getCategoryId, categoryId)
+                .eq(ForumPost::getResourceType, resourceType.name())
+                .eq(resourceId != null, ForumPost::getResourceId, resourceId)
+                .isNull(resourceId == null, ForumPost::getResourceId)
                 .orderByDesc(ForumPost::getPinned)
                 .orderByDesc(ForumPost::getCreatedAt);
         return mapAuthoredPage(posts.selectPage(new Page<>(current, size), query),
@@ -69,7 +77,9 @@ public class CommunityContentServiceImpl implements CommunityContentService {
 
     @Override
     public ForumPostVO getPost(Long postId) {
-        return toPostVO(requirePublishedPost(postId));
+        ForumPost post = requirePublishedPost(postId);
+        requireReadablePost(post, null, false);
+        return toPostVO(post);
     }
 
     @Override
@@ -79,10 +89,13 @@ public class CommunityContentServiceImpl implements CommunityContentService {
         if (categories.selectById(request.getCategoryId()) == null) {
             throw new BusinessException(ResultCodeEnum.NOT_FOUND);
         }
+        requireReadableResource(request.getResourceType(), request.getResourceId(), null, false);
         LocalDateTime now = LocalDateTime.now();
         ForumPost post = new ForumPost();
         post.setCategoryId(request.getCategoryId());
         post.setAuthorId(actorId);
+        post.setResourceType(request.getResourceType().name());
+        post.setResourceId(request.getResourceId());
         post.setTitle(request.getTitle().trim());
         post.setContentMarkdown(request.getContentMarkdown());
         post.setContentHtml(renderSafeHtml(request.getContentMarkdown()));
@@ -107,7 +120,8 @@ public class CommunityContentServiceImpl implements CommunityContentService {
 
     @Override
     public IPage<ForumCommentVO> listComments(Long postId, long current, long size) {
-        requirePublishedPost(postId);
+        ForumPost post = requirePublishedPost(postId);
+        requireReadablePost(post, null, false);
         LambdaQueryWrapper<ForumComment> query = new LambdaQueryWrapper<ForumComment>()
                 .eq(ForumComment::getPostId, postId)
                 .eq(ForumComment::getStatus, PUBLISHED)
@@ -121,6 +135,7 @@ public class CommunityContentServiceImpl implements CommunityContentService {
     public long createComment(Long postId, CreateForumCommentDTO request, Long actorId) {
         requireActiveActor(actorId);
         ForumPost post = requirePublishedPost(postId);
+        requireReadablePost(post, null, false);
         if (Boolean.TRUE.equals(post.getLocked())) {
             throw new BusinessException(ResultCodeEnum.FORBIDDEN);
         }
@@ -249,6 +264,23 @@ public class CommunityContentServiceImpl implements CommunityContentService {
             throw new BusinessException(ResultCodeEnum.FORBIDDEN);
         }
         return actor;
+    }
+
+    private void requireReadableResource(
+            ForumResourceType resourceType, Long resourceId, Long actorId, boolean administrator) {
+        if (resourceType == ForumResourceType.PROBLEM) {
+            requirePublicProblem(resourceId);
+        } else if (resourceType == ForumResourceType.CONTEST) {
+            contests.detail(resourceId, actorId, administrator);
+        }
+    }
+
+    private void requireReadablePost(ForumPost post, Long actorId, boolean administrator) {
+        requireReadableResource(
+                ForumResourceType.valueOf(post.getResourceType()),
+                post.getResourceId(),
+                actorId,
+                administrator);
     }
 
     private String renderSafeHtml(String markdown) {

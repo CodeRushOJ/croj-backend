@@ -6,6 +6,7 @@ import com.zephyr.croj.common.exception.BusinessException;
 import com.zephyr.croj.common.response.Result;
 import com.zephyr.croj.model.dto.CreateForumCommentDTO;
 import com.zephyr.croj.model.dto.CreateForumPostDTO;
+import com.zephyr.croj.model.dto.ForumPostFilter;
 import com.zephyr.croj.model.entity.ForumCategory;
 import com.zephyr.croj.model.vo.ForumCommentVO;
 import com.zephyr.croj.model.vo.ForumPostVO;
@@ -22,6 +23,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -47,10 +49,11 @@ public class ForumController {
     @GetMapping("/posts")
     @Operation(summary = "帖子列表")
     public Result<IPage<ForumPostVO>> listPosts(
-            @RequestParam(required = false) @Positive Long categoryId,
+            @ModelAttribute @Valid ForumPostFilter filter,
             @RequestParam(defaultValue = "1") @Min(1) long current,
             @RequestParam(defaultValue = "20") @Min(1) @Max(50) long size) {
-        return Result.success(content.listPosts(categoryId, current, size));
+        return Result.success(content.listPosts(
+                filter.getCategoryId(), filter.getResourceType(), filter.getResourceId(), current, size));
     }
 
     @PostMapping("/posts")

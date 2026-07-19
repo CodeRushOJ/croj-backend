@@ -9,8 +9,10 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.zephyr.croj.common.exception.GlobalExceptionHandler;
 import com.zephyr.croj.problem.importer.ProblemImportResponses;
 import com.zephyr.croj.problem.importer.ProblemImportService;
+import com.zephyr.croj.problem.importer.ProblemPackageParseException;
 import jakarta.servlet.http.HttpServletRequest;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -28,7 +30,9 @@ class AdminProblemImportControllerTest {
     @BeforeEach
     void setUp() {
         when(request.getAttribute("userId")).thenReturn(7L);
-        mvc = MockMvcBuilders.standaloneSetup(new AdminProblemImportController(imports, request)).build();
+        mvc = MockMvcBuilders.standaloneSetup(new AdminProblemImportController(imports, request))
+                .setControllerAdvice(new GlobalExceptionHandler())
+                .build();
     }
 
     @Test
@@ -59,5 +63,21 @@ class AdminProblemImportControllerTest {
                 .andExpect(jsonPath("$.data.importedCount").value(2));
 
         verify(imports).commit(eq(7L), eq("job-42"));
+    }
+
+    @Test
+    void mapsMalformedOrUnsupportedPackagesToAGenericBadRequest() throws Exception {
+        byte[] bytes = "not-a-package".getBytes(StandardCharsets.UTF_8);
+        when(imports.preflight(7L, "bad.bin", bytes))
+                .thenThrow(new ProblemPackageParseException("secret parser detail"));
+
+        mvc.perform(multipart("/v1/admin/problem-imports/preflight")
+                        .file(new MockMultipartFile(
+                                "file", "bad.bin", "application/octet-stream", bytes)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(40000))
+                .andExpect(jsonPath("$.message").value("题目包格式错误或超出限制"))
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.not(
+                        org.hamcrest.Matchers.containsString("secret"))));
     }
 }

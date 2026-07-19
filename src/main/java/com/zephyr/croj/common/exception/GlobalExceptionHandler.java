@@ -4,6 +4,7 @@ import com.zephyr.croj.announcement.AnnouncementApiException;
 import com.zephyr.croj.common.enums.ResultCodeEnum;
 import com.zephyr.croj.common.response.Result;
 import com.zephyr.croj.contest.ContestApiException;
+import com.zephyr.croj.problem.importer.ProblemPackageParseException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -125,6 +126,13 @@ public class GlobalExceptionHandler {
     public Result<Void> handleMalformedRequest(Exception exception) {
         log.warn("请求格式错误: {}", exception.getMessage());
         return Result.error(ResultCodeEnum.PARAM_ERROR.getCode(), "请求格式错误");
+    }
+
+    @ExceptionHandler(ProblemPackageParseException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public Result<Void> handleProblemPackageParseException(ProblemPackageParseException exception) {
+        log.warn("题目包解析失败: {}", exception.getMessage());
+        return Result.error(ResultCodeEnum.PARAM_ERROR.getCode(), "题目包格式错误或超出限制");
     }
 
     /**

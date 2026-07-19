@@ -44,7 +44,7 @@
 ### Task 6: Verify, review, and publish
 
 - [x] Update API/README/CHANGELOG with actual endpoint, V8, retry, and storage behavior.
-- [x] Run the full Java 17 Maven suite and package; 156 tests passed together and 2 repository lifecycle tests passed in a focused follow-up (158 total, zero failures).
+- [x] Run the full Java 17 Maven suite and package; final suite is 159 tests with zero failures.
 - [x] Run V1-V8 on MySQL 8.4.10 plus ShellCheck, container, and `git diff --check` gates.
-- [ ] Request a fresh independent Critical/Important review and resolve all findings.
+- [x] Request a fresh independent Critical/Important review and resolve the malformed-package 500 response finding with a dedicated 400 mapping and MVC regression test.
 - [ ] Push the single integration branch and open one Draft PR against `codex/discussion-resources`, linking #20 and #22.

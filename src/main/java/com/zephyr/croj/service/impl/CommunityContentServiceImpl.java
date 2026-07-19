@@ -268,6 +268,12 @@ public class CommunityContentServiceImpl implements CommunityContentService {
 
     private void requireReadableResource(
             ForumResourceType resourceType, Long resourceId, Long actorId, boolean administrator) {
+        boolean invalid = resourceType == null
+                || (resourceType == ForumResourceType.GENERAL && resourceId != null)
+                || (resourceType != ForumResourceType.GENERAL && (resourceId == null || resourceId <= 0));
+        if (invalid) {
+            throw new BusinessException(ResultCodeEnum.PARAM_ERROR);
+        }
         if (resourceType == ForumResourceType.PROBLEM) {
             requirePublicProblem(resourceId);
         } else if (resourceType == ForumResourceType.CONTEST) {

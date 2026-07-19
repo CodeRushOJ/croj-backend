@@ -23,6 +23,9 @@ public class CreateForumPostDTO {
 
     @AssertTrue(message = "resourceId is required for PROBLEM/CONTEST and forbidden for GENERAL")
     public boolean isResourceReferenceValid() {
+        if (resourceType == null) {
+            return false;
+        }
         return resourceType == ForumResourceType.GENERAL ? resourceId == null : resourceId != null;
     }
 }

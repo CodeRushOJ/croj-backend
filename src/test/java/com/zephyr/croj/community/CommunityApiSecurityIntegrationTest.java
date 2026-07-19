@@ -79,6 +79,14 @@ class CommunityApiSecurityIntegrationTest {
     }
 
     @Test
+    void discussionFiltersRejectAnExplicitEmptyResourceType() throws Exception {
+        mvc.perform(get("/v1/forum/posts")
+                        .param("resourceType", "")
+                        .param("resourceId", "11"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void problemDiscussionCreationRequiresAProblemId() throws Exception {
         String token = tokens.createToken(7L, "ada", List.of("USER"));
         String body = """

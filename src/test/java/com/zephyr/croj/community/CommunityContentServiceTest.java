@@ -8,6 +8,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.when;
 
 import com.zephyr.croj.common.exception.BusinessException;
+import com.zephyr.croj.contest.ContestApiException;
 import com.zephyr.croj.contest.ContestService;
 import com.zephyr.croj.mapper.ForumCategoryMapper;
 import com.zephyr.croj.mapper.ForumCommentMapper;
@@ -171,6 +172,12 @@ class CommunityContentServiceTest {
     }
 
     @Test
+    void aNullResourceTypeNeverReachesTheForumMapper() {
+        assertThrows(BusinessException.class, () -> service.listPosts(null, null, 11L, 1, 20));
+        verify(posts, never()).selectPage(any(), any());
+    }
+
+    @Test
     void aPostCannotBypassItsHiddenProblemThroughTheDetailEndpoint() {
         ForumPost post = new ForumPost();
         post.setId(9L);
@@ -227,5 +234,45 @@ class CommunityContentServiceTest {
 
         assertThrows(BusinessException.class, () -> service.createComment(9L, request, 7L));
         verify(comments, never()).insert(any(ForumComment.class));
+    }
+
+    @Test
+    void privateContestDiscussionsStayClosedAcrossEveryReadAndCommentPath() {
+        ForumPost post = new ForumPost();
+        post.setId(9L);
+        post.setAuthorId(8L);
+        post.setResourceType("CONTEST");
+        post.setResourceId(20L);
+        post.setStatus("PUBLISHED");
+        when(posts.selectById(9L)).thenReturn(post);
+        when(contests.detail(20L, null, false))
+                .thenThrow(ContestApiException.forbidden("private contest requires managed registration"));
+        User actor = new User();
+        actor.setId(7L);
+        actor.setStatus(0);
+        when(users.getById(7L)).thenReturn(actor);
+        CreateForumCommentDTO comment = new CreateForumCommentDTO();
+        comment.setContentMarkdown("This must remain private.");
+
+        assertThrows(
+                ContestApiException.class,
+                () -> service.listPosts(null, ForumResourceType.CONTEST, 20L, 1, 20));
+        assertThrows(ContestApiException.class, () -> service.getPost(9L));
+        assertThrows(ContestApiException.class, () -> service.listComments(9L, 1, 30));
+        assertThrows(ContestApiException.class, () -> service.createComment(9L, comment, 7L));
+
+        verify(posts, never()).selectPage(any(), any());
+        verify(comments, never()).selectPage(any(), any());
+        verify(comments, never()).insert(any(ForumComment.class));
+    }
+
+    @Test
+    void publishedPublicContestDiscussionFeedReachesTheMapper() {
+        when(contests.detail(20L, null, false)).thenReturn(null);
+        when(posts.selectPage(any(), any())).thenReturn(new com.baomidou.mybatisplus.extension.plugins.pagination.Page<>());
+
+        service.listPosts(null, ForumResourceType.CONTEST, 20L, 1, 20);
+
+        verify(posts).selectPage(any(), any());
     }
 }

@@ -6,6 +6,10 @@
 
 ### Added
 
+- 生产后端镜像：digest 固定的 Maven/JDK 17 builder、Distroless Java 17 runtime、BuildKit 依赖缓存和 OCI provenance/SBOM。
+- shell-free Actuator liveness healthcheck，严格 localhost、连接/读取超时、不跟随重定向且不读取响应体。
+- 容器静态合同与 stopped-container rootfs 导出检查；验证 non-root UID/GID 65532、端口、prod Profile 及 runtime 不含源码/Maven/compiler/shell/package manager。
+- GitHub Actions 镜像门禁：Syft SPDX artifact、Trivy SARIF，以及不忽略 unfixed 的 HIGH/CRITICAL 阻断扫描。
 - 竞赛核心：公开/私有比赛、报名与托管名单、公告、澄清回复、严格赛时题目可见性。
 - ACM 实时榜、冻结榜和最终榜，稳定 first AC、罚时与独占截止边界。
 - 比赛提交固定编排时的不可变题目版本；冻结/最终榜加入可校验的数据库快照缓存。
@@ -14,8 +18,13 @@
 
 ### Security
 
+- runtime 使用无 shell/包管理器的 Distroless nonroot 基础镜像，Kubernetes 合同固定只读根文件系统，并只允许挂载 `/tmp` 与 `/app/uploads`。
 - 管理端竞赛接口实施角色校验，阻止跨比赛澄清回复、无效题目版本和幽灵参赛用户。
 - 题目编排与发布使用聚合行锁串行化，避免发布竞态破坏比赛题单。
+
+### Changed
+
+- `prod` Profile 的 graceful shutdown phase timeout 固定为 30 秒，并将 multipart 临时目录与上传目录分别对齐 `/tmp`、`/app/uploads`。
 
 ## [0.3.0] - 2026-07-18
 

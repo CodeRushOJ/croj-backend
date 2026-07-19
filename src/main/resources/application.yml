@@ -34,19 +34,16 @@ spring:
     protocol: smtp
     default-encoding: UTF-8
     username: ${SMTP_USERNAME:}
-    password: ${SMTP_PASSWORD}
+    password: ${SMTP_PASSWORD:}
     properties:
       mail:
         smtp:
-          auth: true
+          auth: ${SMTP_AUTH:false}
           starttls:
-            enable: true
-            required: true
+            enable: ${SMTP_STARTTLS:false}
+            required: ${SMTP_STARTTLS:false}
           ssl:
-            enable: true
-          socketFactory:
-            port: 465
-            class: javax.net.ssl.SSLSocketFactory
+            enable: ${SMTP_SSL:false}
   servlet:
     multipart:
       enabled: true

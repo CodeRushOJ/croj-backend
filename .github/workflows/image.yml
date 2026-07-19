@@ -46,9 +46,13 @@ jobs:
           RUNTIME_BASE: gcr.io/distroless/java17-debian13:nonroot@sha256:81d09cac6ec47f6a13c61a941557f95079213320f3ddbf9d353de9317669aab5
         run: |
           for image in "$BUILDER_BASE" "$RUNTIME_BASE"; do
-            manifest="$(docker buildx imagetools inspect "$image")"
-            grep -q 'linux/amd64' <<<"$manifest"
-            grep -q 'linux/arm64' <<<"$manifest"
+            manifest="$(docker buildx imagetools inspect --raw "$image")"
+            printf '%s\n' "$image"
+            jq -r '.manifests[]?.platform | select(.os != "unknown") | "  \(.os)/\(.architecture)"' <<<"$manifest"
+            jq -e '
+              ([.manifests[]?.platform | "\(.os)/\(.architecture)"] | index("linux/amd64")) != null and
+              ([.manifests[]?.platform | "\(.os)/\(.architecture)"] | index("linux/arm64")) != null
+            ' <<<"$manifest" >/dev/null
           done
 
       - name: Derive immutable image metadata
@@ -111,8 +115,8 @@ jobs:
           exit-code: "0"
 
       - name: Upload Trivy SARIF
-        if: always()
-        uses: github/codeql-action/upload-sarif@b7351df727350dca84cb9d725d57dcf5bc82ba26 # v3
+        if: ${{ always() && hashFiles('trivy-results.sarif') != '' }}
+        uses: github/codeql-action/upload-sarif@7188fc363630916deb702c7fdcf4e481b751f97a # v4
         with:
           sarif_file: trivy-results.sarif
 

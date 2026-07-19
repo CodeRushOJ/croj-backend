@@ -67,7 +67,9 @@ public class AnnouncementRepository {
                  WHERE scope='GLOBAL'
                    AND lifecycle IN ('SCHEDULED','PUBLISHED')
                    AND publish_at<=? AND (expires_at IS NULL OR expires_at>?)
-                 ORDER BY is_pinned DESC,pin_order ASC,publish_at DESC,id DESC
+                 ORDER BY is_pinned DESC,
+                          CASE WHEN is_pinned=1 THEN pin_order ELSE 0 END ASC,
+                          publish_at DESC,id DESC
                  LIMIT ? OFFSET ?
                 """,
                 this::map,

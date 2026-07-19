@@ -2,7 +2,7 @@
 
 ## Goal
 
-Close the administrator path from a real FPS upload to judge-ready published problems without weakening the existing immutable-version, private-object-storage, or Kubernetes multi-replica contracts. The frontend contract remains `POST /v1/admin/problem-imports/preflight` followed by idempotent `POST /v1/admin/problem-imports/{jobId}/commit`.
+Close the administrator path from a real FPS upload to judge-ready published problems without weakening the existing immutable-version, private-object-storage, or Kubernetes multi-replica contracts. The external HTTP contract remains `POST /api/v1/admin/problem-imports/preflight` followed by idempotent `POST /api/v1/admin/problem-imports/{jobId}/commit`; frontend request helpers omit the `/api` servlet context from their relative route.
 
 ## Decisions
 

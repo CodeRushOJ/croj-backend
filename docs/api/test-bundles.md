@@ -53,7 +53,7 @@ AWS S3 可省略 `TEST_BUNDLE_S3_ENDPOINT` 并按部署区域设置 `AWS_REGION`
 两个接口都要求 `ADMIN` 或 `SUPER_ADMIN`：
 
 ```http
-POST /v1/admin/problem-imports/preflight
+POST /api/v1/admin/problem-imports/preflight
 Content-Type: multipart/form-data
 
 file=@fps.xml
@@ -62,7 +62,7 @@ file=@fps.xml
 预检按内容识别 FPS XML 或仅包含一个 XML 文件的安全 ZIP，校验后把原始包写入私有 S3/MinIO 暂存区，并在 V8 的 `t_problem_import_job` 保存归属管理员、SHA-256、摘要和 24 小时过期时间。多副本只共享数据库与对象存储，不依赖 Pod 本地文件。
 
 ```http
-POST /v1/admin/problem-imports/{jobId}/commit
+POST /api/v1/admin/problem-imports/{jobId}/commit
 ```
 
 提交会锁定当前管理员拥有的未过期任务，重新下载、验 SHA-256、解析和校验，然后为每道题创建草稿版本、生成确定性 TestBundle 并通过发布门禁公开。整个数据库步骤在一个事务中完成；重复提交已完成任务会返回相同 `importedCount`，不会重复创建题目。

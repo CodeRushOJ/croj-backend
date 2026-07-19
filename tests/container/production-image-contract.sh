@@ -6,7 +6,7 @@ dockerfile="$repo_root/Dockerfile"
 dockerignore="$repo_root/.dockerignore"
 prod_config="$repo_root/src/main/resources/application-prod.yml"
 healthcheck_source="$repo_root/src/main/java/com/coderushoj/container/ActuatorHealthCheck.java"
-workflow="$repo_root/.github/workflows/image.yml"
+workflow="${IMAGE_WORKFLOW_FILE:-$repo_root/.github/workflows/image.yml}"
 
 fail() {
   printf 'container contract: %s\n' "$1" >&2
@@ -68,6 +68,9 @@ done
 
 require_pattern "$workflow" 'provenance:[[:space:]]+mode=max' 'CI must generate maximum BuildKit provenance'
 require_pattern "$workflow" 'sbom:[[:space:]]+true' 'CI must request BuildKit SBOM attestations'
+require_pattern "$workflow" 'imagetools inspect --raw' 'CI must inspect machine-readable base index manifests'
+require_pattern "$workflow" 'jq -e' 'CI must fail when required base platforms are absent'
+require_pattern "$workflow" "hashFiles\('trivy-results\.sarif'\)[[:space:]]*!=[[:space:]]*''" 'SARIF upload must require an existing report'
 require_pattern "$workflow" 'anchore/sbom-action' 'CI must generate a Syft SBOM'
 require_pattern "$workflow" 'aquasecurity/trivy-action' 'CI must scan the image with Trivy'
 require_pattern "$workflow" "severity:[[:space:]]*['\"]?HIGH,CRITICAL" 'Trivy must report HIGH and CRITICAL findings'

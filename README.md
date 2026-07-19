@@ -19,6 +19,10 @@ Spring Boot 业务 API，当前覆盖身份、用户、题目、标签、提交�
 
 数据库地址、用户名、SMTP 和 RocketMQ 地址也可以通过 `.env.example` 中的变量覆盖。`.env` 与 `.env.*` 默认被 Git 忽略，`.env.example` 只保留无效占位值。
 
+## 首个超级管理员
+
+全新数据库不包含固定管理员或默认密码。运维通过生产镜像的一次性 `CROJ_MODE=bootstrap-admin` 模式，从 Secret 读取身份和密码，执行 Flyway 后在事务 guard 中永久声明首个 `SUPER_ADMIN` 的 ID 与身份；相同身份重跑不会改密，任何其他身份或账号冲突都会失败关闭。长期 Backend Deployment 不接收这些 bootstrap 变量。完整命令、清理、跨仓 Kubernetes Job 职责和故障处理见 [`docs/operations/admin-bootstrap.md`](docs/operations/admin-bootstrap.md)。
+
 ## 数据库迁移与判题投递
 
 Flyway 在应用启动时按顺序执行 `src/main/resources/db/migration` 中的生产迁移；`dev` Profile 额外加载可重复执行的标签与论坛分类种子。已经发布的版本迁移不可修改，结构变更必须新增更高版本迁移。
@@ -59,6 +63,12 @@ docker run --rm \
 ```
 
 生产部署由 `croj-platform` 固定镜像、注入 Kubernetes Secret 并运行跨仓库验收。不要把真实凭据写回 `application*.yml`。
+
+首个管理员还有一条生产镜像级 MySQL 8.4 回归门禁。它在临时网络和全新 schema 上执行 V1–V9、创建、改密参数重放、不同身份冲突、并发不同身份、旧库已有超级管理员时 fail-closed 与全输出 Secret 扫描：
+
+```bash
+tests/integration/admin-bootstrap-mysql84.sh coderushoj/croj-backend:<tested-tag>
+```
 
 <a id="production-container"></a>
 ## Production container（生产容器）

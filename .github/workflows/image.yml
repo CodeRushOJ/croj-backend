@@ -5,6 +5,7 @@ on:
     paths:
       - Dockerfile
       - .dockerignore
+      - .trivyignore.yaml
       - pom.xml
       - .mvn/**
       - mvnw
@@ -154,6 +155,7 @@ jobs:
           output: trivy-results.sarif
           severity: HIGH,CRITICAL
           exit-code: "0"
+          trivyignores: .trivyignore.yaml
 
       - name: Upload Trivy SARIF
         if: ${{ always() && hashFiles('trivy-results.sarif') != '' }}
@@ -168,3 +170,4 @@ jobs:
           format: table
           severity: HIGH,CRITICAL
           exit-code: "1"
+          trivyignores: .trivyignore.yaml

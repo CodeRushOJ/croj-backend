@@ -32,6 +32,8 @@
 
 ### Security
 
+- 生产依赖门禁移除无安全修复的 penggle/kaptcha，改用 `SecureRandom` 验证码生成器；RocketMQ 的 Netty、gRPC、Protobuf、BeanUtils 与 lz4 传递依赖升级到已修复版本，并由 Maven Enforcer 阻止回退。
+- Trivy 仍阻断全部应用级 HIGH/CRITICAL；仅对 Distroless Debian 13 当前无修复包的 7 个 OS finding 使用包级、带说明且 2026-08-31 到期的临时例外。
 - 全新部署不再依赖固定默认管理员密码；bootstrap guard 一经声明便拒绝所有其他身份，重跑不会提升冲突账号、复活已删除账号或静默重置凭据，命令输出经过凭据脱敏。
 - Bootstrap JDBC URL 只接受简单 MySQL host/schema 与显式非敏感参数 allowlist，拒绝 userinfo、Connector/J address/host descriptor 和嵌套连接属性；密码同时执行 Unicode 字符下限与 BCrypt 72 UTF-8 bytes 上限。
 - 论坛列表、详情、评论读取和评论发布统一复核关联资源可见性，阻止通过帖子 ID 访问隐藏题目或未公开比赛。

@@ -1,0 +1,39 @@
+vulnerabilities:
+  # Debian has not published a fixed package for these findings in the pinned
+  # Distroless Java 17 base. Keep the exceptions package-scoped and short-lived;
+  # dependency CVEs are intentionally excluded from this file.
+  - id: CVE-2025-59375
+    purls:
+      - pkg:deb/debian/libexpat1
+    expired_at: 2026-08-31
+    statement: No Debian 13 fix is available; review the Distroless digest before expiry.
+  - id: CVE-2026-25210
+    purls:
+      - pkg:deb/debian/libexpat1
+    expired_at: 2026-08-31
+    statement: No Debian 13 fix is available; review the Distroless digest before expiry.
+  - id: CVE-2026-45186
+    purls:
+      - pkg:deb/debian/libexpat1
+    expired_at: 2026-08-31
+    statement: No Debian 13 fix is available; review the Distroless digest before expiry.
+  - id: CVE-2026-56131
+    purls:
+      - pkg:deb/debian/libexpat1
+    expired_at: 2026-08-31
+    statement: No Debian 13 fix is available; review the Distroless digest before expiry.
+  - id: CVE-2026-56407
+    purls:
+      - pkg:deb/debian/libexpat1
+    expired_at: 2026-08-31
+    statement: No Debian 13 fix is available; review the Distroless digest before expiry.
+  - id: CVE-2026-56408
+    purls:
+      - pkg:deb/debian/libexpat1
+    expired_at: 2026-08-31
+    statement: No Debian 13 fix is available; review the Distroless digest before expiry.
+  - id: CVE-2026-53615
+    purls:
+      - pkg:deb/debian/libuuid1
+    expired_at: 2026-08-31
+    statement: No Debian 13 fix is available; review the Distroless digest before expiry.

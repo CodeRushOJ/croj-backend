@@ -22,6 +22,21 @@ class BuildModernizationTest {
     }
 
     @Test
+    void productionDependenciesEnforcePublishedSecurityFloors() throws IOException {
+        String pom = Files.readString(Path.of("pom.xml"));
+        assertFalse(pom.contains("<artifactId>kaptcha</artifactId>"));
+        assertTrue(pom.contains("<netty.version>4.1.136.Final</netty.version>"));
+        assertTrue(pom.contains("<grpc.version>1.75.0</grpc.version>"));
+        assertTrue(pom.contains("<protobuf.version>3.25.5</protobuf.version>"));
+        assertTrue(pom.contains("<commons-beanutils.version>1.11.0</commons-beanutils.version>"));
+        assertTrue(pom.contains("<lz4-java.version>1.10.1</lz4-java.version>"));
+        assertTrue(pom.contains("<groupId>at.yawk.lz4</groupId>"));
+        assertTrue(pom.contains("<artifactId>rocketmq-logback-classic</artifactId>"));
+        assertTrue(pom.contains("<artifactId>rocketmq-shaded-slf4j-api-bridge</artifactId>"));
+        assertTrue(pom.contains("<artifactId>maven-enforcer-plugin</artifactId>"));
+    }
+
+    @Test
     void applicationCodeUsesJakartaApis() throws IOException {
         try (Stream<Path> sources = Files.walk(Path.of("src", "main", "java"))) {
             for (Path source : sources.filter(path -> path.toString().endsWith(".java")).toList()) {

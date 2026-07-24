@@ -4,6 +4,8 @@ set -Eeuo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 dockerfile="$repo_root/Dockerfile"
 dockerignore="$repo_root/.dockerignore"
+pom="$repo_root/pom.xml"
+trivy_ignores="$repo_root/.trivyignore.yaml"
 prod_config="$repo_root/src/main/resources/application-prod.yml"
 healthcheck_source="$repo_root/src/main/java/com/coderushoj/container/ActuatorHealthCheck.java"
 workflow="${IMAGE_WORKFLOW_FILE:-$repo_root/.github/workflows/image.yml}"
@@ -33,7 +35,7 @@ reject_pattern() {
   fi
 }
 
-for required in "$dockerfile" "$dockerignore" "$prod_config" "$healthcheck_source" "$workflow"; do
+for required in "$dockerfile" "$dockerignore" "$pom" "$trivy_ignores" "$prod_config" "$healthcheck_source" "$workflow"; do
   require_file "$required"
 done
 
@@ -55,6 +57,15 @@ require_pattern "$dockerfile" 'org\.opencontainers\.image\.base\.digest=' 'runti
 reject_pattern "$dockerfile" '(^|[[:space:]])(apt-get|apk|yum|dnf)[[:space:]]' 'Dockerfile must not install a shell or package manager payload'
 reject_pattern "$dockerfile" 'JAVA_TOOL_OPTIONS' 'healthcheck must not inherit launcher options that Java prints to health logs'
 reject_pattern "$dockerfile" '\./mvnw' 'production build must not download an unpinned Maven distribution'
+
+reject_pattern "$pom" '<artifactId>kaptcha</artifactId>' 'unmaintained kaptcha must not enter the production dependency graph'
+require_pattern "$pom" '<netty.version>4\.1\.136\.Final</netty.version>' 'Netty security floor is missing'
+require_pattern "$pom" '<grpc.version>1\.75\.0</grpc.version>' 'gRPC security floor is missing'
+require_pattern "$pom" '<protobuf.version>3\.25\.5</protobuf.version>' 'Protobuf security floor is missing'
+require_pattern "$pom" '<commons-beanutils.version>1\.11\.0</commons-beanutils.version>' 'BeanUtils security floor is missing'
+require_pattern "$pom" '<lz4-java.version>1\.10\.1</lz4-java.version>' 'lz4-java security floor is missing'
+require_pattern "$pom" '<groupId>at\.yawk\.lz4</groupId>' 'maintained lz4-java coordinate is required'
+require_pattern "$pom" '<artifactId>maven-enforcer-plugin</artifactId>' 'transitive vulnerability floors must be enforced'
 
 while IFS= read -r base_ref; do
   grep -Fq -- "$base_ref" "$workflow" || fail "workflow must verify Dockerfile base $base_ref"
@@ -85,9 +96,25 @@ require_pattern "$workflow" 'jq -e' 'CI must fail when required base platforms a
 require_pattern "$workflow" "hashFiles\('trivy-results\.sarif'\)[[:space:]]*!=[[:space:]]*''" 'SARIF upload must require an existing report'
 require_pattern "$workflow" 'anchore/sbom-action' 'CI must generate a Syft SBOM'
 require_pattern "$workflow" 'aquasecurity/trivy-action' 'CI must scan the image with Trivy'
+[[ "$(grep -Ec 'trivyignores:[[:space:]]+\.trivyignore\.yaml' "$workflow")" -eq 2 ]] ||
+  fail 'both Trivy report and gate must use the reviewed ignore file'
 require_pattern "$workflow" "severity:[[:space:]]*['\"]?HIGH,CRITICAL" 'Trivy must report HIGH and CRITICAL findings'
 require_pattern "$workflow" "exit-code:[[:space:]]*['\"]1['\"]?" 'Trivy must fail CI when HIGH/CRITICAL findings exist'
 reject_pattern "$workflow" 'ignore-unfixed:[[:space:]]*true' 'CI must not hide unfixed HIGH/CRITICAL findings'
 reject_pattern "$workflow" 'continue-on-error:[[:space:]]*true' 'image security gates must not fail open'
+
+for unfixed_os_cve in \
+  CVE-2025-59375 \
+  CVE-2026-25210 \
+  CVE-2026-45186 \
+  CVE-2026-56131 \
+  CVE-2026-56407 \
+  CVE-2026-56408 \
+  CVE-2026-53615; do
+  require_pattern "$trivy_ignores" "id:[[:space:]]+$unfixed_os_cve" "missing reviewed exception for $unfixed_os_cve"
+done
+[[ "$(grep -Ec '^[[:space:]]+- id:[[:space:]]+CVE-' "$trivy_ignores")" -eq 7 ]] ||
+  fail 'only the seven reviewed Distroless OS findings may be suppressed'
+require_pattern "$trivy_ignores" 'expired_at:[[:space:]]+2026-08-31' 'temporary OS exceptions must expire'
 
 printf 'container contract: static checks passed\n'

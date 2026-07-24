@@ -9,6 +9,7 @@
 - SMTP 环境配置同时支持本地 Mailpit 明文传输、生产 STARTTLS（587）和隐式 TLS（465），认证、TLS 与凭据不再硬编码。
 - 一次性首个超级管理员 bootstrap 模式：V9 持久化 identity guard、并发幂等创建、BCrypt 密码、审计事件和 Secret-only 生产镜像命令。
 - 生产镜像级 MySQL 8.4 bootstrap 门禁，真实执行 V1–V9、重放、冲突、不同身份并发、旧库权限 fail-closed、hash 不变性和完整日志脱敏检查。
+- 真实 MySQL 8.4 Flyway V1-V7 升级门禁：在一次性数据库中验证旧论坛数据回填、V7 `CHECK` 约束、精确复合索引及非法资源关联拒绝，并提供本地与 CI 共用脚本。
 - 论坛主题新增 `GENERAL/PROBLEM/CONTEST` 资源关联、按资源分页过滤和 V7 前向迁移；题目/比赛详情可只加载自己的讨论。
 - 全局公告公开分页、当前公告和详情 API，严格按 UTC 发布窗口过滤并支持稳定置顶顺序。
 - 公告管理端草稿、未来排期、立即发布、撤回、归档和全生命周期筛选 API。

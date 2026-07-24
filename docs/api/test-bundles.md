@@ -9,7 +9,12 @@ TEST_BUNDLE_STORAGE_ENABLED=true
 TEST_BUNDLE_S3_BUCKET=coderushoj-test-bundles
 TEST_BUNDLE_S3_ENDPOINT=http://minio.storage.svc.cluster.local:9000
 TEST_BUNDLE_S3_PATH_STYLE=true
-TEST_BUNDLE_MAX_COMPRESSION_RATIO=100
+TEST_BUNDLE_MAX_ARCHIVE_BYTES=268435456
+TEST_BUNDLE_MAX_MANIFEST_BYTES=1048576
+TEST_BUNDLE_MAX_CASE_BYTES=66060288
+TEST_BUNDLE_MAX_UNCOMPRESSED_BYTES=66060288
+TEST_BUNDLE_MAX_CASES=256
+TEST_BUNDLE_MAX_COMPRESSION_RATIO=200
 AWS_REGION=us-east-1
 AWS_ACCESS_KEY_ID=replace-me
 AWS_SECRET_ACCESS_KEY=replace-me
@@ -21,27 +26,32 @@ AWS S3 可省略 `TEST_BUNDLE_S3_ENDPOINT` 并按部署区域设置 `AWS_REGION`
 
 ```json
 {
-  "totalUncompressedBytes": 8,
+  "schemaVersion": 1,
+  "judgeMode": "ACM",
+  "checker": "exact",
+  "limits": {
+    "timeLimitMillis": 1000,
+    "memoryLimitMiB": 256
+  },
   "cases": [
     {
-      "id": 1,
+      "id": "1",
       "input": "cases/1.in",
       "output": "cases/1.out",
-      "inputBytes": 4,
-      "outputBytes": 4
+      "weight": 1
     }
   ]
 }
 ```
 
-`cases` 不得为空，ID 必须为正整数且唯一；输入输出路径必须是 `cases/` 下的安全相对路径且互不重复；声明总字节数必须等于各文件字节数之和并低于配置上限。
+这是 Backend 与 Judging Server 共用的严格 v1 契约：只接受 `schemaVersion=1`、`judgeMode=ACM`、`checker=exact|token`；`limits` 的时间和内存必须为正整数，并与绑定的不可变 `ProblemVersion.limits_json` 完全一致；`cases` 不得为空，字符串 ID 必须匹配 `[A-Za-z0-9][A-Za-z0-9._-]{0,63}` 且唯一；ACM 权重必须为 `1`；输入输出路径必须是 `cases/` 下的安全相对路径且互不重复。未知字段会被拒绝。
 
-`TestBundleService` 是最终信任边界：它流式读取真实 ZIP，拒绝非 ZIP、目录、路径穿越、重复文件、manifest 未声明的文件、缺失文件、实际字节数不符、总解压大小超限和压缩比超限。不能仅依赖上传方提供的 manifest。FPS 解析器还会独立限制题目数、文本、测试点、内嵌图片并禁止 DTD/XXE 和网络访问。
+ZIP 根目录必须含且只含一个 `manifest.json`，其规范化结构必须与数据库 `manifest_json` 完全一致；其余文件必须恰好是 manifest 引用的测试输入输出。`TestBundleService` 是最终信任边界：它只采用与 Judging Server 相同的中央目录视图，不再依赖可被截断或伪造的 local-header-only 视图，并拒绝加密、symlink/非普通文件、不支持的压缩方法、路径穿越、重复/未声明/缺失文件、manifest 不一致、非法 UTF-8、单文件或总解压大小超限；每个 entry 还会独立校验压缩比、CRC 与声明大小。Backend 最多接受 256 个测试点；manifest 上限为 1 MiB，单文件和整个 bundle 的展开预算均为 63 MiB，压缩比阈值为 200。这为 Judging Server 的 64 MiB batch wire 上限保留至少 1 MiB 给源码和协议开销。FPS 解析器还会独立限制题目数、文本、测试点、内嵌图片并禁止 DTD/XXE 和网络访问。
 
 ## Publication flow
 
 1. 创建题目与不可变 `ProblemVersion(DRAFT)`。
-2. 解析器规范化测试文件并生成 ZIP 与 manifest。
+2. 解析器规范化测试文件，生成 canonical v1 manifest，并把同一 JSON 写入 ZIP 根目录 `manifest.json`。
 3. `TestBundleService` 校验限制，计算 SHA-256，并写入内容寻址的私有对象。
 4. 写入唯一的 `t_test_bundle.problem_version_id` 元数据。
 5. `ProblemVersionPublicationService` 锁定版本与测试包，原子更新版本为 `PUBLISHED`、题目 `published_version_id` 和公开状态。
@@ -59,10 +69,10 @@ Content-Type: multipart/form-data
 file=@fps.xml
 ```
 
-预检按内容识别 FPS XML 或仅包含一个 XML 文件的安全 ZIP，校验后把原始包写入私有 S3/MinIO 暂存区，并在 V8 的 `t_problem_import_job` 保存归属管理员、SHA-256、摘要和 24 小时过期时间。多副本只共享数据库与对象存储，不依赖 Pod 本地文件。
+预检按内容识别 FPS XML 或仅包含一个 XML 文件的安全 ZIP，并在返回 `READY` 前检查 256-case 上限及隐藏输入输出容量；校验后把原始包写入私有 S3/MinIO 暂存区，并在 V8 的 `t_problem_import_job` 保存归属管理员、SHA-256、摘要和 24 小时过期时间。多副本只共享数据库与对象存储，不依赖 Pod 本地文件。
 
 ```http
 POST /api/v1/admin/problem-imports/{jobId}/commit
 ```
 
-提交会锁定当前管理员拥有的未过期任务，重新下载、验 SHA-256、解析和校验，然后为每道题创建草稿版本、生成确定性 TestBundle 并通过发布门禁公开。整个数据库步骤在一个事务中完成；重复提交已完成任务会返回相同 `importedCount`，不会重复创建题目。
+提交会锁定当前管理员拥有的未过期任务，重新下载、验 SHA-256、解析和校验，然后为每道题创建草稿版本、以 `STORED` entry 生成不会触发自身压缩比门禁的确定性 TestBundle，并通过发布门禁公开。整个数据库步骤在一个事务中完成；重复提交已完成任务会返回相同 `importedCount`，不会重复创建题目。

@@ -106,9 +106,11 @@ app:
     endpoint: ${TEST_BUNDLE_S3_ENDPOINT:}
     path-style: ${TEST_BUNDLE_S3_PATH_STYLE:true}
     max-archive-bytes: ${TEST_BUNDLE_MAX_ARCHIVE_BYTES:268435456}
-    max-uncompressed-bytes: ${TEST_BUNDLE_MAX_UNCOMPRESSED_BYTES:1073741824}
-    max-cases: ${TEST_BUNDLE_MAX_CASES:10000}
-    max-compression-ratio: ${TEST_BUNDLE_MAX_COMPRESSION_RATIO:100}
+    max-manifest-bytes: ${TEST_BUNDLE_MAX_MANIFEST_BYTES:1048576}
+    max-case-bytes: ${TEST_BUNDLE_MAX_CASE_BYTES:66060288}
+    max-uncompressed-bytes: ${TEST_BUNDLE_MAX_UNCOMPRESSED_BYTES:66060288}
+    max-cases: ${TEST_BUNDLE_MAX_CASES:256}
+    max-compression-ratio: ${TEST_BUNDLE_MAX_COMPRESSION_RATIO:200}
   outbox:
     enabled: ${OUTBOX_ENABLED:true}
     submission-topic: ${SUBMISSION_TOPIC:submission-topic}

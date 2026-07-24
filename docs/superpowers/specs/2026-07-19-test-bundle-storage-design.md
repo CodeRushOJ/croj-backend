@@ -17,7 +17,20 @@ Make every published `ProblemVersion` judge-ready by requiring an immutable hidd
 
 Object keys are `test-bundles/{problemId}/{versionId}/{sha256}.zip`. Re-uploading the same bytes is safe. A database failure after S3 succeeds may leave an unreachable content-addressed object for a later garbage collector; it cannot expose hidden tests or publish an unusable version. Buckets remain private and no public/presigned URL is returned by these APIs.
 
-Limits are configured and validated before upload. The manifest must be a JSON object with a non-empty `cases` array, unique positive case IDs, safe relative input/output paths, and declared aggregate uncompressed bytes within the configured limit. Package parsers remain responsible for ZIP entry-count, compression-ratio, traversal, DTD and XXE defenses before they call this boundary.
+Limits are configured and validated before upload. The manifest follows the shared
+Judging Server v1 schema (`schemaVersion=1`, `judgeMode=ACM`,
+`checker=exact|token`, immutable execution limits, string case IDs, and unit
+ACM weights). Manifest limits must equal the bound `ProblemVersion` snapshot. The archive must
+contain the same normalized JSON as root `manifest.json` plus exactly the
+referenced case files. The service uses the same ZIP central-directory view as
+Judging instead of a local-header-only stream, and rejects encrypted, symlink,
+non-regular, unsupported and truncated entries,
+requires strict UTF-8 case content, and enforces per-entry compression ratio plus
+manifest, per-case and aggregate uncompressed limits at the final storage
+boundary. A bundle contains at most 256 cases and at most 63 MiB uncompressed so
+the Judging Server's 64 MiB batch request retains room for source and protocol
+overhead. Package parsers additionally enforce their source-format DTD and XXE
+limits.
 
 ## Publication invariant
 

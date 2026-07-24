@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zephyr.croj.common.enums.ResultCodeEnum;
 import com.zephyr.croj.common.exception.BusinessException;
+import com.zephyr.croj.config.properties.TestBundleProperties;
 import com.zephyr.croj.mapper.ProblemVersionMapper;
 import com.zephyr.croj.model.dto.ProblemCreateDTO;
 import com.zephyr.croj.model.entity.TestBundle;
@@ -24,6 +25,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.zip.CRC32;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 import lombok.RequiredArgsConstructor;
@@ -119,7 +121,10 @@ public class ProblemImportService {
             if (versionId == null) {
                 throw new BusinessException(ResultCodeEnum.PROBLEM_NOT_JUDGE_READY);
             }
-            BuiltBundle bundle = buildBundle(draft.tests());
+            BuiltBundle bundle = buildBundle(
+                    draft.tests(),
+                    draft.timeLimitMillis(),
+                    memoryMegabytes(draft.memoryLimitKilobytes()));
             TestBundle attached = bundles.attach(problemId, versionId, bundle.archive(), bundle.manifest());
             if (attached == null) {
                 throw new BusinessException(ResultCodeEnum.PROBLEM_NOT_JUDGE_READY);
@@ -142,6 +147,21 @@ public class ProblemImportService {
             requireText(draft.outputDescription(), "output description", errors);
             if (draft.tests().isEmpty()) {
                 errors.add("problem has no hidden test cases");
+            }
+            if (draft.tests().size() > TestBundleProperties.V1_MAX_CASES) {
+                errors.add("judge manifest v1 supports at most 256 hidden test cases");
+            }
+            if (!caseContentsFit(
+                    draft.tests(),
+                    TestBundleProperties.V1_MAX_BUNDLE_BYTES
+                            - TestBundleProperties.V1_MAX_MANIFEST_BYTES)) {
+                errors.add("hidden test contents exceed the judge manifest v1 capacity");
+            }
+            if (draft.codeResources().stream().anyMatch(resource ->
+                    resource.kind() == ProblemImportCodeKind.SPECIAL_JUDGE
+                            || resource.kind() == ProblemImportCodeKind.TESTLIB_JUDGE
+                            || resource.kind() == ProblemImportCodeKind.INTERACTOR)) {
+                errors.add("special judges and interactors are not supported by judge manifest v1");
             }
             if (draft.timeLimitMillis() < 1 || draft.timeLimitMillis() > 10_000) {
                 errors.add("time limit must be between 1 and 10000 milliseconds");
@@ -191,12 +211,35 @@ public class ProblemImportService {
         return request;
     }
 
-    private BuiltBundle buildBundle(List<ProblemImportCase> cases) {
+    private BuiltBundle buildBundle(
+            List<ProblemImportCase> cases,
+            int timeLimitMillis,
+            int memoryLimitMiB) {
         try {
-            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
             List<Map<String, Object>> manifestCases = new ArrayList<>();
-            long total = 0;
+            for (int index = 0; index < cases.size(); index++) {
+                int id = index + 1;
+                Map<String, Object> item = new LinkedHashMap<>();
+                item.put("id", Integer.toString(id));
+                item.put("input", "cases/%d.in".formatted(id));
+                item.put("output", "cases/%d.out".formatted(id));
+                item.put("weight", 1);
+                manifestCases.add(item);
+            }
+            Map<String, Object> manifestRoot = new LinkedHashMap<>();
+            manifestRoot.put("schemaVersion", 1);
+            manifestRoot.put("judgeMode", "ACM");
+            manifestRoot.put("checker", "exact");
+            Map<String, Object> limits = new LinkedHashMap<>();
+            limits.put("timeLimitMillis", timeLimitMillis);
+            limits.put("memoryLimitMiB", memoryLimitMiB);
+            manifestRoot.put("limits", limits);
+            manifestRoot.put("cases", manifestCases);
+            String manifest = toJson(manifestRoot);
+
+            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
             try (ZipOutputStream zip = new ZipOutputStream(bytes)) {
+                writeEntry(zip, "manifest.json", manifest.getBytes(StandardCharsets.UTF_8));
                 for (int index = 0; index < cases.size(); index++) {
                     int id = index + 1;
                     byte[] input = cases.get(index).input().getBytes(StandardCharsets.UTF_8);
@@ -205,20 +248,10 @@ public class ProblemImportService {
                     String outputPath = "cases/%d.out".formatted(id);
                     writeEntry(zip, inputPath, input);
                     writeEntry(zip, outputPath, output);
-                    total = Math.addExact(total, input.length + (long) output.length);
-                    Map<String, Object> item = new LinkedHashMap<>();
-                    item.put("id", id);
-                    item.put("input", inputPath);
-                    item.put("output", outputPath);
-                    item.put("inputBytes", input.length);
-                    item.put("outputBytes", output.length);
-                    manifestCases.add(item);
                 }
             }
-            return new BuiltBundle(bytes.toByteArray(), toJson(Map.of(
-                    "totalUncompressedBytes", total,
-                    "cases", manifestCases)));
-        } catch (IOException | ArithmeticException exception) {
+            return new BuiltBundle(bytes.toByteArray(), manifest);
+        } catch (IOException exception) {
             throw new BusinessException(ResultCodeEnum.SYSTEM_ERROR);
         }
     }
@@ -226,9 +259,41 @@ public class ProblemImportService {
     private void writeEntry(ZipOutputStream zip, String path, byte[] content) throws IOException {
         ZipEntry entry = new ZipEntry(path);
         entry.setTime(0L);
+        CRC32 crc = new CRC32();
+        crc.update(content);
+        entry.setMethod(ZipEntry.STORED);
+        entry.setSize(content.length);
+        entry.setCompressedSize(content.length);
+        entry.setCrc(crc.getValue());
         zip.putNextEntry(entry);
         zip.write(content);
         zip.closeEntry();
+    }
+
+    static boolean caseContentsFit(List<ProblemImportCase> cases, long maximumBytes) {
+        if (maximumBytes < 0) {
+            return false;
+        }
+        long total = 0;
+        try {
+            for (ProblemImportCase testCase : cases) {
+                if (testCase.input() == null || testCase.output() == null) {
+                    return false;
+                }
+                total = Math.addExact(
+                        total,
+                        testCase.input().getBytes(StandardCharsets.UTF_8).length);
+                total = Math.addExact(
+                        total,
+                        testCase.output().getBytes(StandardCharsets.UTF_8).length);
+                if (total > maximumBytes) {
+                    return false;
+                }
+            }
+            return true;
+        } catch (ArithmeticException exception) {
+            return false;
+        }
     }
 
     private int memoryMegabytes(int kilobytes) {

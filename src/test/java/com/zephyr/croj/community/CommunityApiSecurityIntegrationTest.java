@@ -10,8 +10,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.zephyr.croj.community.ForumResourceType;
+import com.zephyr.croj.model.dto.ProblemQueryDTO;
+import com.zephyr.croj.model.vo.ProblemVO;
 import com.zephyr.croj.security.JwtTokenProvider;
 import com.zephyr.croj.service.CommunityContentService;
+import com.zephyr.croj.service.ProblemService;
 import java.util.List;
 import org.apache.rocketmq.spring.core.RocketMQTemplate;
 import org.junit.jupiter.api.Test;
@@ -40,6 +43,7 @@ class CommunityApiSecurityIntegrationTest {
     @Autowired private MockMvc mvc;
     @Autowired private JwtTokenProvider tokens;
     @MockitoBean private CommunityContentService content;
+    @MockitoBean private ProblemService problems;
     @MockitoBean private RocketMQTemplate rocketMq;
 
     @Test
@@ -51,6 +55,24 @@ class CommunityApiSecurityIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true));
         mvc.perform(get("/v1/problems/11/solutions"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+    }
+
+    @Test
+    void publishedProblemDetailAndListReadsArePublic() throws Exception {
+        ProblemVO problem = new ProblemVO();
+        problem.setId(11L);
+        problem.setTitle("Published title");
+        when(problems.getProblemById(11L, null)).thenReturn(problem);
+        when(problems.getProblemList(any(ProblemQueryDTO.class), eq(null))).thenReturn(new Page<>());
+
+        mvc.perform(get("/problem/11"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.title").value("Published title"));
+        mvc.perform(post("/problem/list")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true));
     }

@@ -15,6 +15,7 @@ public class ProblemVersionPublicationService {
 
     @Transactional
     public void publish(long problemId, long versionId) {
+        lockProblem(problemId);
         List<String> states = jdbc.query(
                 """
                 SELECT pv.state
@@ -43,6 +44,16 @@ public class ProblemVersionPublicationService {
                         problemId)
                 != 1) {
             throw new BusinessException(ResultCodeEnum.UPDATE_ERROR);
+        }
+    }
+
+    public void lockProblem(long problemId) {
+        List<Long> locked = jdbc.query(
+                "SELECT id FROM t_problem WHERE id=? AND is_deleted=0 FOR UPDATE",
+                (result, row) -> result.getLong("id"),
+                problemId);
+        if (locked.isEmpty()) {
+            throw new BusinessException(ResultCodeEnum.PROBLEM_NOT_JUDGE_READY);
         }
     }
 }

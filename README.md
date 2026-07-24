@@ -63,7 +63,7 @@ SMTP_SSL=true
 
 Flyway 在应用启动时按顺序执行 `src/main/resources/db/migration` 中的生产迁移；`dev` Profile 额外加载可重复执行的标签与论坛分类种子。已经发布的版本迁移不可修改，结构变更必须新增更高版本迁移。
 
-v1 发布版以全新的 MySQL schema 为安装合同。早期原型使用仓库根目录手工 `db.sql` 建表，没有 Flyway schema history，非空原型库不能直接原地升级为 v1。当前项目没有生产数据时，应创建新 schema、由 Flyway 执行 V1–V10，再通过一次性 bootstrap 建立首个管理员；如需保留历史原型数据，必须先导出并经过单独、可审计的数据迁移，不能通过 `baseline-on-migrate` 跳过 V1。V10 会为生产环境补齐公告、算法交流和题目讨论三个基础论坛分类，创建帖子不依赖 `dev` Profile。
+v1 发布版以全新的 MySQL schema 为安装合同。早期原型使用仓库根目录手工 `db.sql` 建表，没有 Flyway schema history，非空原型库不能直接原地升级为 v1。当前项目没有生产数据时，应创建新 schema、由 Flyway 执行 V1–V11，再通过一次性 bootstrap 建立首个管理员；如需保留历史原型数据，必须先导出并经过单独、可审计的数据迁移，不能通过 `baseline-on-migrate` 跳过 V1。V10 会为生产环境补齐公告、算法交流和题目讨论三个基础论坛分类，创建帖子不依赖 `dev` Profile；V11 为旧题目版本补齐公开投影所需的来源和难度字段。
 
 提交数据库迁移前必须运行真实 MySQL 兼容门禁：
 
@@ -71,7 +71,7 @@ v1 发布版以全新的 MySQL schema 为安装合同。早期原型使用仓库
 scripts/verify-mysql-migrations.sh
 ```
 
-该命令只要求 Docker，不要求宿主机安装 Java、Maven 或 MySQL 客户端。脚本在私有 Docker network 中启动一次性 MySQL 8.4.10 和 Java 容器，先用 Flyway 将空库迁到 V6，写入旧版论坛数据，再升级到 V7 并最终迁到 V10；随后验证完整 V1–V10 历史、旧帖 `GENERAL/NULL` 回填、`CHECK` 约束、复合索引顺序、非法资源关联拒绝、生产论坛分类及既有运维自定义分类不被覆盖。脚本退出时自动删除数据库容器与 network，Maven 依赖保存在被 Git 忽略的 `.cache/maven`。
+该命令只要求 Docker，不要求宿主机安装 Java、Maven 或 MySQL 客户端。脚本在私有 Docker network 中启动一次性 MySQL 8.4.10 和 Java 容器，先用 Flyway 将空库迁到 V6，写入旧版论坛数据，再升级到 V7 并最终迁到 V11；随后验证完整 V1–V11 历史、旧帖 `GENERAL/NULL` 回填、`CHECK` 约束、复合索引顺序、非法资源关联拒绝、生产论坛分类、既有运维自定义分类不被覆盖，以及旧题目版本公开投影字段的补齐与保留。脚本退出时自动删除数据库容器与 network，Maven 依赖保存在被 Git 忽略的 `.cache/maven`。
 
 CI 使用 digest 固定的 MySQL 8.4.10 与 Java 镜像。排查镜像代理或预拉取问题时，可临时通过 `MYSQL_IMAGE`、`MAVEN_IMAGE`、`MAVEN_CACHE_DIR` 和 `MYSQL_START_TIMEOUT_SECONDS` 覆盖默认值；这些变量只控制一次性测试环境，不能用于传入生产凭据。
 
@@ -111,7 +111,7 @@ docker run --rm \
 
 生产部署由 `croj-platform` 固定镜像、注入 Kubernetes Secret 并运行跨仓库验收。不要把真实凭据写回 `application*.yml`。
 
-首个管理员还有一条生产镜像级 MySQL 8.4 回归门禁。它在临时网络和全新 schema 上执行 V1–V10、验证生产论坛分类、创建管理员、改密参数重放、不同身份冲突、并发不同身份、旧库已有超级管理员时 fail-closed 与全输出 Secret 扫描：
+首个管理员还有一条生产镜像级 MySQL 8.4 回归门禁。它在临时网络和全新 schema 上执行 V1–V11、验证生产论坛分类、创建管理员、改密参数重放、不同身份冲突、并发不同身份、旧库已有超级管理员时 fail-closed 与全输出 Secret 扫描：
 
 ```bash
 tests/integration/admin-bootstrap-mysql84.sh coderushoj/croj-backend:<tested-tag>

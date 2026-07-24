@@ -72,7 +72,7 @@ public class SecurityConfig {
                 "Content-Type",
                 "X-Requested-With",
                 "If-Match"));
-        configuration.setExposedHeaders(List.of("Authorization", "Captcha-Key")); // 添加 Captcha-Key
+        configuration.setExposedHeaders(List.of("Authorization", "Captcha-Key", "ETag"));
         configuration.setAllowCredentials(corsProperties.allowCredentials());
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
@@ -104,6 +104,8 @@ public class SecurityConfig {
                         ).permitAll()
                         .requestMatchers("/uploads/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/actuator/health", "/actuator/health/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/problem/*", "/problem/no/*").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/problem/list").permitAll()
                         .requestMatchers(HttpMethod.GET, "/v1/contests/*/me").authenticated()
                         .requestMatchers(HttpMethod.GET,
                                 "/v1/forum/**",

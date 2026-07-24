@@ -209,16 +209,69 @@ mysql_query "
   VALUES ('Operator custom problem forum', 'problems', 999);
 " >/dev/null
 
-printf 'Upgrading the populated schema through V10\n'
-run_flyway 10
+mysql_query "
+  INSERT INTO t_problem (
+    id, problem_no, title, description, input_description, output_description,
+    difficulty, source, create_user_id, status, published_version_id
+  ) VALUES (
+    9001, 'PMIG11', 'Legacy draft title', 'Legacy description', 'Legacy input', 'Legacy output',
+    3, 'legacy-source', 42, 0, NULL
+  );
+  INSERT INTO t_problem_version (
+    id, problem_id, version_no, state, statement_json, limits_json, judge_config_json,
+    created_by, published_at
+  ) VALUES (
+    9101, 9001, 1, 'PUBLISHED',
+    JSON_OBJECT(
+      'title', 'Legacy published title',
+      'description', 'Legacy description',
+      'inputDescription', 'Legacy input',
+      'outputDescription', 'Legacy output',
+      'hints', JSON_ARRAY(),
+      'samples', JSON_ARRAY()
+    ),
+    JSON_OBJECT('timeLimit', 1000, 'memoryLimit', 256, 'totalScore', 100),
+    JSON_OBJECT(
+      'specialJudge', FALSE,
+      'specialJudgeCode', NULL,
+      'specialJudgeLanguage', NULL,
+      'judgeMode', 0
+    ),
+    42, CURRENT_TIMESTAMP(3)
+  ), (
+    9102, 9001, 2, 'DRAFT',
+    JSON_OBJECT(
+      'title', 'Complete draft title',
+      'description', 'Complete description',
+      'inputDescription', 'Complete input',
+      'outputDescription', 'Complete output',
+      'hints', JSON_ARRAY(),
+      'samples', JSON_ARRAY(),
+      'source', 'snapshot-source'
+    ),
+    JSON_OBJECT('timeLimit', 2000, 'memoryLimit', 512, 'totalScore', 100),
+    JSON_OBJECT(
+      'specialJudge', FALSE,
+      'specialJudgeCode', NULL,
+      'specialJudgeLanguage', NULL,
+      'judgeMode', 0,
+      'difficulty', 1
+    ),
+    42, NULL
+  );
+  UPDATE t_problem SET published_version_id = 9101 WHERE id = 9001;
+" >/dev/null
+
+printf 'Upgrading the populated schema through V11\n'
+run_flyway 11
 
 flyway_versions="$(mysql_query "
   SELECT GROUP_CONCAT(version ORDER BY installed_rank SEPARATOR ',')
   FROM flyway_schema_history
   WHERE type = 'SQL' AND success = 1;
 ")"
-assert_equals "Flyway recorded successful V1-V10 migrations" \
-  "1,2,3,4,5,6,7,8,9,10" "$flyway_versions"
+assert_equals "Flyway recorded successful V1-V11 migrations" \
+  "1,2,3,4,5,6,7,8,9,10,11" "$flyway_versions"
 
 category_slugs="$(mysql_query "
   SELECT GROUP_CONCAT(slug ORDER BY sort_order, slug SEPARATOR ',')
@@ -235,5 +288,29 @@ custom_category="$(mysql_query "
 ")"
 assert_equals "V10 preserves an operator-customized category" \
   "Operator custom problem forum|999" "$custom_category"
+
+legacy_projection="$(mysql_query "
+  SELECT CONCAT(
+    JSON_UNQUOTE(JSON_EXTRACT(statement_json, '$.source')),
+    '|',
+    JSON_UNQUOTE(JSON_EXTRACT(judge_config_json, '$.difficulty'))
+  )
+  FROM t_problem_version
+  WHERE id = 9101;
+")"
+assert_equals "V11 completes legacy public problem snapshots" \
+  "legacy-source|3" "$legacy_projection"
+
+complete_projection="$(mysql_query "
+  SELECT CONCAT(
+    JSON_UNQUOTE(JSON_EXTRACT(statement_json, '$.source')),
+    '|',
+    JSON_UNQUOTE(JSON_EXTRACT(judge_config_json, '$.difficulty'))
+  )
+  FROM t_problem_version
+  WHERE id = 9102;
+")"
+assert_equals "V11 preserves fields already stored in a problem snapshot" \
+  "snapshot-source|1" "$complete_projection"
 
 printf 'MySQL 8.4 Flyway migration gate passed.\n'

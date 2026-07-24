@@ -1,6 +1,7 @@
 package com.zephyr.croj.model.vo;
 
 import com.baomidou.mybatisplus.annotation.TableLogic;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.zephyr.croj.model.entity.ProblemTag;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
@@ -124,6 +125,9 @@ public class ProblemVO implements Serializable {
      * 题目状态（0-公开，1-私有，2-比赛中）
      */
     private Integer status;
+
+    @JsonIgnore
+    private Long publishedVersionId;
 
     /**
      * 题目标签列表

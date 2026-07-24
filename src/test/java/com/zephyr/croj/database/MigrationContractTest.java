@@ -30,6 +30,8 @@ class MigrationContractTest {
             "src", "main", "resources", "db", "migration", "V9__admin_bootstrap_guard.sql");
     private static final Path FORUM_CATEGORY_SEED = Path.of(
             "src", "main", "resources", "db", "migration", "V10__seed_forum_categories.sql");
+    private static final Path PROBLEM_VERSION_PROJECTION = Path.of(
+            "src", "main", "resources", "db", "migration", "V11__complete_problem_version_projection.sql");
 
     @Test
     void cleanSchemaCoversTheCompleteFreeOjDomain() throws IOException {
@@ -172,5 +174,20 @@ class MigrationContractTest {
         assertTrue(sql.contains("where not exists"));
         assertFalse(sql.contains("delete from"));
         assertFalse(sql.contains("update `t_forum_category`"));
+    }
+
+    @Test
+    void legacyProblemVersionsGainEveryPublicProjectionFieldInAForwardOnlyMigration()
+            throws IOException {
+        assertTrue(Files.isRegularFile(PROBLEM_VERSION_PROJECTION));
+        String sql = Files.readString(PROBLEM_VERSION_PROJECTION).toLowerCase();
+        assertTrue(sql.contains("update `t_problem_version`"));
+        assertTrue(sql.contains("json_contains_path"));
+        assertTrue(sql.contains("json_set"));
+        assertTrue(sql.contains("'$.source'"));
+        assertTrue(sql.contains("'$.difficulty'"));
+        assertTrue(sql.contains("p.`source`"));
+        assertTrue(sql.contains("p.`difficulty`"));
+        assertFalse(sql.contains("update `t_problem`"));
     }
 }

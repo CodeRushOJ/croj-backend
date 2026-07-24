@@ -8,7 +8,7 @@
 
 - SMTP 环境配置同时支持本地 Mailpit 明文传输、生产 STARTTLS（587）和隐式 TLS（465），认证、TLS 与凭据不再硬编码。
 - 一次性首个超级管理员 bootstrap 模式：V9 持久化 identity guard、并发幂等创建、BCrypt 密码、审计事件和 Secret-only 生产镜像命令。
-- 生产镜像级 MySQL 8.4 bootstrap 门禁，真实执行 V1–V10、论坛分类、重放、冲突、不同身份并发、旧库权限 fail-closed、hash 不变性和完整日志脱敏检查。
+- 生产镜像级 MySQL 8.4 bootstrap 门禁，真实执行 V1–V11、论坛分类、重放、冲突、不同身份并发、旧库权限 fail-closed、hash 不变性和完整日志脱敏检查。
 - 真实 MySQL 8.4 Flyway V1-V7 升级门禁：在一次性数据库中验证旧论坛数据回填、V7 `CHECK` 约束、精确复合索引及非法资源关联拒绝，并提供本地与 CI 共用脚本。
 - TestBundle 与 Judging Server 统一使用严格 manifest v1；题包现在内嵌同一 `manifest.json`，并对未知字段、单用例、总展开大小及跨副本不一致 fail-closed。
 - 论坛主题新增 `GENERAL/PROBLEM/CONTEST` 资源关联、按资源分页过滤和 V7 前向迁移；题目/比赛详情可只加载自己的讨论。
@@ -29,6 +29,9 @@
 - 单题草稿 TestBundle 管理 API：管理员可读取强 ETag、上传完整 v1 ZIP 并在验证后原子发布，不再只能依赖批量题包导入。
 - 管理端题目版本发现 API：按新旧顺序返回真实版本 ID、状态、TestBundle 元数据和强 ETag，前端无需猜测草稿版本。
 - V10 生产迁移为全新数据库提供公告、算法交流和题目讨论基础分类，论坛 HTTP 创建闭环不再依赖开发种子。
+- V11 前向迁移为历史题目版本补齐公开投影所需的 `source` 与 `difficulty`，且保留快照中已经存在的值。
+- 题目公开详情、编号查询和列表统一从 `published_version_id` 投影不可变题面；管理员仍读取最新草稿，列表搜索、难度过滤和分页总数均按可见快照计算。
+- 题目详情现在按提交历史返回未提交、已通过或尝试未通过状态；跨域响应公开 `ETag`，浏览器可完成 TestBundle 乐观并发流程。
 - 管理端 FPS 题包预检/提交 REST 闭环：V8 持久化导入任务、私有对象暂存、管理员归属与过期校验、提交重解析及幂等返回。
 - TestBundle 最终信任边界现在会流式核验真实 ZIP entry、实际字节数、manifest 完整性、路径安全、总解压大小与压缩比。
 - 竞赛 V5 数据库迁移、H2 集成测试、MySQL 迁移契约和完整 API 文档。
@@ -56,7 +59,7 @@
 - 生产镜像工作流先在 Java 17 中运行完整 Maven 测试，测试失败时上传 Surefire 报告，镜像构建必须等待测试通过。
 - 经过 GitHub 验证的 `vX.Y.Z` 签名 tag 在全部门禁通过后发布 GHCR 双架构版本/commit 镜像；普通分支只保留短期 attested OCI artifact，不发布 `latest`。
 - 管理端跨域预检允许 `If-Match`，浏览器现在可以调用公告等使用乐观并发控制的写接口。
-- v1 明确要求从全新 MySQL schema 执行 Flyway V1–V10；没有 Flyway history 的非空手工 `db.sql` 原型库不支持原地升级，历史数据必须走单独审计迁移。
+- v1 明确要求从全新 MySQL schema 执行 Flyway V1–V11；没有 Flyway history 的非空手工 `db.sql` 原型库不支持原地升级，历史数据必须走单独审计迁移。
 
 ## [0.3.0] - 2026-07-18
 

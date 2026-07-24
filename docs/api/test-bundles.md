@@ -54,9 +54,14 @@ ZIP 根目录必须含且只含一个 `manifest.json`，其规范化结构必须
 2. 解析器规范化测试文件，生成 canonical v1 manifest，并把同一 JSON 写入 ZIP 根目录 `manifest.json`。
 3. `TestBundleService` 校验限制，计算 SHA-256，并写入内容寻址的私有对象。
 4. 写入唯一的 `t_test_bundle.problem_version_id` 元数据。
-5. `ProblemVersionPublicationService` 锁定版本与测试包，原子更新版本为 `PUBLISHED`、题目 `published_version_id` 和公开状态。
+5. `ProblemVersionPublicationService` 先锁定题目聚合行，再锁定版本与测试包，原子更新版本为 `PUBLISHED`、题目 `published_version_id` 和公开状态。
 
 对象写入成功、数据库事务失败时可能留下不可达的内容寻址对象，后续可由 GC 清理；系统不会因此产生已发布但不可判的版本。
+
+`t_problem` 始终保存管理端最新草稿，公开详情、题号查询和列表则以
+`published_version_id` 指向的 `ProblemVersion` 为展示快照；标题搜索、难度过滤和分页总数也按该快照计算。
+因此编辑已发布题目不会提前泄漏新题面或限制，只有上述原子指针切换才会改变公开内容。新快照包含
+`source` 与 `difficulty`，V11 会为 V3 等历史版本补齐这两个投影字段。
 
 ## 管理端导入 API
 

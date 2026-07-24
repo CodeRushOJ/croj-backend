@@ -25,6 +25,7 @@
         <result column="submit_count" property="submitCount" />
         <result column="accepted_count" property="acceptedCount" />
         <result column="status" property="status" />
+        <result column="published_version_id" property="publishedVersionId" />
         <result column="create_time" property="createTime" />
         <result column="update_time" property="updateTime" />
         <result column="is_deleted" property="isDeleted" />
@@ -38,31 +39,83 @@
     <!-- 获取问题列表，带标签和用户提交信息 -->
     <select id="getProblemList" resultMap="ProblemVOResultMap">
         SELECT
-        p.*,
+        p.id,
+        p.problem_no,
         CASE
-        WHEN s.id IS NOT NULL AND s.status = 1 THEN 1 -- 已通过
-        WHEN s.id IS NOT NULL THEN 2 -- 已尝试但未通过
-        ELSE 0 -- 未尝试
-        END as user_status
+          WHEN NOT #{canManageAll}
+               AND (#{userId} IS NULL OR p.create_user_id &lt;&gt; #{userId})
+               AND p.published_version_id IS NOT NULL
+            THEN JSON_UNQUOTE(JSON_EXTRACT(pv.statement_json, '$.title'))
+          ELSE p.title
+        END AS title,
+        p.description,
+        p.input_description,
+        p.output_description,
+        p.hints,
+        p.samples,
+        p.time_limit,
+        p.memory_limit,
+        CASE
+          WHEN NOT #{canManageAll}
+               AND (#{userId} IS NULL OR p.create_user_id &lt;&gt; #{userId})
+               AND p.published_version_id IS NOT NULL
+            THEN CAST(JSON_UNQUOTE(JSON_EXTRACT(pv.judge_config_json, '$.difficulty')) AS UNSIGNED)
+          ELSE p.difficulty
+        END AS difficulty,
+        p.is_special_judge,
+        p.special_judge_code,
+        p.special_judge_language,
+        p.judge_mode,
+        p.total_score,
+        p.source,
+        p.create_user_id,
+        p.submit_count,
+        p.accepted_count,
+        p.status,
+        p.published_version_id,
+        p.create_time,
+        p.update_time,
+        p.is_deleted,
+        COALESCE(s.user_status, 0) AS user_status
         FROM
         t_problem p
+        LEFT JOIN t_problem_version pv ON pv.id = p.published_version_id
         LEFT JOIN (
-        SELECT problem_id, status, MAX(id) as id
+        SELECT problem_id,
+               CASE
+                 WHEN SUM(CASE WHEN status = 1 THEN 1 ELSE 0 END) > 0 THEN 1
+                 ELSE 2
+               END AS user_status
         FROM t_submission
-        WHERE user_id = #{userId}
-        GROUP BY problem_id, status
+        WHERE user_id = #{userId} AND is_deleted = 0
+        GROUP BY problem_id
         ) s ON p.id = s.problem_id
         <where>
             p.is_deleted = 0
+            <if test="!canManageAll">
+                AND (p.status = 0 OR p.create_user_id = #{userId})
+            </if>
             <if test="status != null">
                 AND p.status = #{status}
             </if>
             <if test="difficulty != null">
-                AND p.difficulty = #{difficulty}
+                AND CASE
+                  WHEN NOT #{canManageAll}
+                       AND (#{userId} IS NULL OR p.create_user_id &lt;&gt; #{userId})
+                       AND p.published_version_id IS NOT NULL
+                    THEN CAST(JSON_UNQUOTE(JSON_EXTRACT(pv.judge_config_json, '$.difficulty')) AS UNSIGNED)
+                  ELSE p.difficulty
+                END = #{difficulty}
             </if>
             <if test="keyword != null and keyword != ''">
                 AND (
-                p.title LIKE CONCAT('%', #{keyword}, '%')
+                CASE
+                  WHEN NOT #{canManageAll}
+                       AND (#{userId} IS NULL OR p.create_user_id &lt;&gt; #{userId})
+                       AND p.published_version_id IS NOT NULL
+                    THEN JSON_UNQUOTE(JSON_EXTRACT(pv.statement_json, '$.title'))
+                  ELSE p.title
+                END LIKE CONCAT('%', #{keyword}, '%')
                 OR p.problem_no LIKE CONCAT('%', #{keyword}, '%')
                 )
             </if>

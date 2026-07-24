@@ -82,6 +82,7 @@ public class AdminTestBundleService {
 
     @Transactional
     public View publish(long problemId, long versionId, String ifMatch) {
+        publications.lockProblem(problemId);
         View current = load(problemId, versionId, true);
         assertPrecondition(ifMatch, current.etag());
         if (!current.attached()) {

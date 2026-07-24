@@ -37,7 +37,7 @@ docker run --rm \
 
 ## Kubernetes 职责边界
 
-Backend 仓库提供生产镜像命令、V9 事务合同、V10 生产论坛分类以及 MySQL 8.4 集成门禁；[`CodeRushOJ/croj-platform`](https://github.com/CodeRushOJ/croj-platform) 的 `coderushoj` Helm chart 负责 disabled-by-default Kubernetes Job、Secret 引用、active deadline 和 Job/Secret 清理。Bootstrap Secret 只挂载到一次性 Job，绝不能进入长期 Backend Deployment。Kind 和生产环境均通过 platform chart 的管理员 bootstrap values 启用一次 Job，成功后立即关闭该 value 并删除 Secret；具体 values 名称和 Helm 命令以 platform 仓库同版本运维文档为准。
+Backend 仓库提供生产镜像命令、V9 事务合同、V10 生产论坛分类、V11 题目快照兼容迁移以及 MySQL 8.4 集成门禁；[`CodeRushOJ/croj-platform`](https://github.com/CodeRushOJ/croj-platform) 的 `coderushoj` Helm chart 负责 disabled-by-default Kubernetes Job、Secret 引用、active deadline 和 Job/Secret 清理。Bootstrap Secret 只挂载到一次性 Job，绝不能进入长期 Backend Deployment。Kind 和生产环境均通过 platform chart 的管理员 bootstrap values 启用一次 Job，成功后立即关闭该 value 并删除 Secret；具体 values 名称和 Helm 命令以 platform 仓库同版本运维文档为准。
 
 ## 故障处理
 
@@ -47,4 +47,4 @@ Backend 仓库提供生产镜像命令、V9 事务合同、V10 生产论坛分�
 
 ## 自动验收
 
-CI 构建生产镜像后运行 `tests/integration/admin-bootstrap-mysql84.sh <image>`。脚本使用临时 MySQL 8.4 schema 真实执行 V1–V10，验证生产论坛分类、首次创建、不同密码的同身份重放、不同身份冲突、不同身份并发竞争、旧库已有超级管理员时 fail-closed、BCrypt hash 不变、唯一 guard/审计记录，并扫描所有命令输出确保测试 Secret 未泄露。
+CI 构建生产镜像后运行 `tests/integration/admin-bootstrap-mysql84.sh <image>`。脚本使用临时 MySQL 8.4 schema 真实执行 V1–V11，验证生产论坛分类、首次创建、不同密码的同身份重放、不同身份冲突、不同身份并发竞争、旧库已有超级管理员时 fail-closed、BCrypt hash 不变、唯一 guard/审计记录，并扫描所有命令输出确保测试 Secret 未泄露。

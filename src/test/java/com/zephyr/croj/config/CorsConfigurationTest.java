@@ -32,5 +32,6 @@ class CorsConfigurationTest {
         assertThat(cors).isNotNull();
         assertThat(cors.getAllowedHeaders())
                 .contains("Authorization", "Content-Type", "If-Match");
+        assertThat(cors.getExposedHeaders()).contains("ETag");
     }
 }

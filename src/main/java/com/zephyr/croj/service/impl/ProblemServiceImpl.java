@@ -22,6 +22,8 @@ import com.zephyr.croj.service.ProblemService;
 import com.zephyr.croj.service.ProblemTagService;
 import com.zephyr.croj.service.UserService;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -34,6 +36,7 @@ import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
@@ -106,13 +109,13 @@ public class ProblemServiceImpl extends ServiceImpl<ProblemMapper, Problem> impl
     @Transactional(rollbackFor = Exception.class)
     public boolean updateProblem(ProblemUpdateDTO dto, Long userId) {
         // 检查问题是否存在
-        Problem problem = getById(dto.getId());
+        Problem problem = baseMapper.selectForUpdate(dto.getId());
         if (problem == null) {
             throw new BusinessException(ResultCodeEnum.PROBLEM_NOT_EXIST);
         }
 
         // 检查是否有权限修改
-        if (!checkPermission(problem.getId(), userId)) {
+        if (!canEdit(problem, userId)) {
             throw new BusinessException(ResultCodeEnum.FORBIDDEN);
         }
 
@@ -190,12 +193,16 @@ public class ProblemServiceImpl extends ServiceImpl<ProblemMapper, Problem> impl
         }
 
         // 如果是非公开题目，检查用户是否有权限查看
-        if (!problem.getStatus().equals(0) && !checkPermission(id, userId)) {
+        boolean canEdit = canEdit(problem, userId);
+        if (!problem.getStatus().equals(0) && !canEdit) {
             throw new BusinessException(ResultCodeEnum.FORBIDDEN);
         }
 
         // 转换为VO
         ProblemVO vo = convertToVO(problem);
+        if (problem.getPublishedVersionId() != null && !canEdit) {
+            applyPublishedSnapshot(vo, problemVersions.selectById(problem.getPublishedVersionId()));
+        }
 
         // 获取标签
         List<ProblemTagVO> tags = problemTagService.getTagsByProblemId(id);
@@ -216,12 +223,16 @@ public class ProblemServiceImpl extends ServiceImpl<ProblemMapper, Problem> impl
         }
 
         // 如果是非公开题目，检查用户是否有权限查看
-        if (!problem.getStatus().equals(0) && !checkPermission(problem.getId(), userId)) {
+        boolean canEdit = canEdit(problem, userId);
+        if (!problem.getStatus().equals(0) && !canEdit) {
             throw new BusinessException(ResultCodeEnum.FORBIDDEN);
         }
 
         // 转换为VO
         ProblemVO vo = convertToVO(problem);
+        if (problem.getPublishedVersionId() != null && !canEdit) {
+            applyPublishedSnapshot(vo, problemVersions.selectById(problem.getPublishedVersionId()));
+        }
 
         // 获取标签
         List<ProblemTagVO> tags = problemTagService.getTagsByProblemId(problem.getId());
@@ -245,7 +256,11 @@ public class ProblemServiceImpl extends ServiceImpl<ProblemMapper, Problem> impl
         List<Long> tagIds = queryDTO.getTagIds();
 
         // 查询问题列表
-        IPage<ProblemVO> problemPage = baseMapper.getProblemList(page, keyword, difficulty, status, tagIds, userId);
+        User viewer = userId == null ? null : userService.getById(userId);
+        boolean canManageAll = isAdministrator(viewer);
+        IPage<ProblemVO> problemPage =
+                baseMapper.getProblemList(page, keyword, difficulty, status, tagIds, userId, canManageAll);
+        applyPublishedSnapshots(problemPage.getRecords(), userId, canManageAll);
 
         // 获取所有问题ID
         List<Long> problemIds = problemPage.getRecords().stream()
@@ -331,6 +346,20 @@ public class ProblemServiceImpl extends ServiceImpl<ProblemMapper, Problem> impl
         return problem != null && userId.equals(problem.getCreateUserId());
     }
 
+    private boolean canEdit(Problem problem, Long userId) {
+        if (problem == null || userId == null) {
+            return false;
+        }
+        User user = userService.getById(userId);
+        return isAdministrator(user) || userId.equals(problem.getCreateUserId());
+    }
+
+    private boolean isAdministrator(User user) {
+        return user != null
+                && (UserRoleEnum.ADMIN.getCode().equals(user.getRole())
+                        || UserRoleEnum.SUPER_ADMIN.getCode().equals(user.getRole()));
+    }
+
     /**
      * 获取用户提交状态
      *
@@ -342,10 +371,7 @@ public class ProblemServiceImpl extends ServiceImpl<ProblemMapper, Problem> impl
         if (userId == null) {
             return 0;
         }
-
-        // 这里应该查询用户提交记录表得到状态
-        // 由于提交记录相关功能还未实现，这里先返回0
-        return 0;
+        return baseMapper.getUserSubmitStatus(problemId, userId);
     }
 
     /**
@@ -358,6 +384,80 @@ public class ProblemServiceImpl extends ServiceImpl<ProblemMapper, Problem> impl
         ProblemVO vo = new ProblemVO();
         BeanUtils.copyProperties(problem, vo);
         return vo;
+    }
+
+    private void applyPublishedSnapshots(List<ProblemVO> views, Long userId, boolean canManageAll) {
+        if (canManageAll || views.isEmpty()) {
+            return;
+        }
+        List<Long> versionIds = views.stream()
+                .filter(view -> view.getPublishedVersionId() != null)
+                .filter(view -> !Objects.equals(view.getCreateUserId(), userId))
+                .map(ProblemVO::getPublishedVersionId)
+                .distinct()
+                .toList();
+        if (versionIds.isEmpty()) {
+            return;
+        }
+        Map<Long, ProblemVersion> snapshots = problemVersions.selectBatchIds(versionIds).stream()
+                .collect(Collectors.toMap(ProblemVersion::getId, version -> version));
+        views.stream()
+                .filter(view -> view.getPublishedVersionId() != null)
+                .filter(view -> !Objects.equals(view.getCreateUserId(), userId))
+                .forEach(view -> applyPublishedSnapshot(view, snapshots.get(view.getPublishedVersionId())));
+    }
+
+    private void applyPublishedSnapshot(ProblemVO view, ProblemVersion version) {
+        if (version == null || !"PUBLISHED".equals(version.getState())) {
+            throw new BusinessException(ResultCodeEnum.SYSTEM_ERROR);
+        }
+        try {
+            JsonNode statement = objectMapper.readTree(version.getStatementJson());
+            JsonNode limits = objectMapper.readTree(version.getLimitsJson());
+            JsonNode judge = objectMapper.readTree(version.getJudgeConfigJson());
+            view.setTitle(requiredText(statement, "title"));
+            view.setDescription(requiredText(statement, "description"));
+            view.setInputDescription(requiredText(statement, "inputDescription"));
+            view.setOutputDescription(requiredText(statement, "outputDescription"));
+            view.setHints(objectMapper.convertValue(
+                    statement.path("hints"), new TypeReference<List<String>>() {}));
+            view.setSamples(objectMapper.convertValue(
+                    statement.path("samples"), new TypeReference<List<Map<String, String>>>() {}));
+            JsonNode source = statement.get("source");
+            view.setSource(source == null || source.isNull() ? null : source.textValue());
+            view.setTimeLimit(requiredInt(limits, "timeLimit"));
+            view.setMemoryLimit(requiredInt(limits, "memoryLimit"));
+            JsonNode totalScore = limits.get("totalScore");
+            view.setTotalScore(totalScore == null || totalScore.isNull() ? null : totalScore.intValue());
+            view.setIsSpecialJudge(judge.path("specialJudge").booleanValue());
+            JsonNode specialJudgeCode = judge.get("specialJudgeCode");
+            view.setSpecialJudgeCode(
+                    specialJudgeCode == null || specialJudgeCode.isNull() ? null : specialJudgeCode.textValue());
+            JsonNode specialJudgeLanguage = judge.get("specialJudgeLanguage");
+            view.setSpecialJudgeLanguage(specialJudgeLanguage == null || specialJudgeLanguage.isNull()
+                    ? null
+                    : specialJudgeLanguage.textValue());
+            view.setJudgeMode(requiredInt(judge, "judgeMode"));
+            view.setDifficulty(requiredInt(judge, "difficulty"));
+        } catch (JsonProcessingException | IllegalArgumentException exception) {
+            throw new BusinessException(ResultCodeEnum.SYSTEM_ERROR);
+        }
+    }
+
+    private String requiredText(JsonNode object, String field) {
+        JsonNode value = object == null ? null : object.get(field);
+        if (value == null || !value.isTextual()) {
+            throw new IllegalArgumentException("published problem snapshot is incomplete");
+        }
+        return value.textValue();
+    }
+
+    private int requiredInt(JsonNode object, String field) {
+        JsonNode value = object == null ? null : object.get(field);
+        if (value == null || !value.isIntegralNumber() || !value.canConvertToInt()) {
+            throw new IllegalArgumentException("published problem snapshot is incomplete");
+        }
+        return value.intValue();
     }
 
     /**
@@ -410,6 +510,7 @@ public class ProblemServiceImpl extends ServiceImpl<ProblemMapper, Problem> impl
         snapshot.put("outputDescription", problem.getOutputDescription());
         snapshot.put("hints", problem.getHints());
         snapshot.put("samples", problem.getSamples());
+        snapshot.put("source", problem.getSource());
         return snapshot;
     }
 
@@ -427,6 +528,7 @@ public class ProblemServiceImpl extends ServiceImpl<ProblemMapper, Problem> impl
         snapshot.put("specialJudgeCode", problem.getSpecialJudgeCode());
         snapshot.put("specialJudgeLanguage", problem.getSpecialJudgeLanguage());
         snapshot.put("judgeMode", problem.getJudgeMode());
+        snapshot.put("difficulty", problem.getDifficulty());
         return snapshot;
     }
 

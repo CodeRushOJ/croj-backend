@@ -7,6 +7,7 @@ import com.zephyr.croj.model.entity.Problem;
 import com.zephyr.croj.model.vo.ProblemVO;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.Select;
 
 import java.util.List;
 
@@ -32,7 +33,26 @@ public interface ProblemMapper extends BaseMapper<Problem> {
                                     @Param("difficulty") Integer difficulty,
                                     @Param("status") Integer status,
                                     @Param("tagIds") List<Long> tagIds,
-                                    @Param("userId") Long userId);
+                                    @Param("userId") Long userId,
+                                    @Param("canManageAll") boolean canManageAll);
+
+    @Select("SELECT * FROM t_problem WHERE id=#{problemId} AND is_deleted=0 FOR UPDATE")
+    Problem selectForUpdate(@Param("problemId") Long problemId);
+
+    @Select("""
+            SELECT CASE
+                     WHEN COUNT(*) = 0 THEN 0
+                     WHEN SUM(CASE WHEN status = 1 THEN 1 ELSE 0 END) > 0 THEN 1
+                     ELSE 2
+                   END
+            FROM t_submission
+            WHERE problem_id = #{problemId}
+              AND user_id = #{userId}
+              AND is_deleted = 0
+            """)
+    int getUserSubmitStatus(
+            @Param("problemId") Long problemId,
+            @Param("userId") Long userId);
 
     /**
      * 通过题目编号查询题目

@@ -19,13 +19,20 @@ class ConfigurationSecurityTest {
         for (String variable : new String[] {
             "DATABASE_PASSWORD",
             "JWT_SECRET",
-            "SMTP_PASSWORD",
             "REDIS_PASSWORD",
             "JUDGE_RESULT_SERVICE_TOKEN",
         }) {
             assertTrue(application.contains("${" + variable + "}"), variable + " must be required");
             assertFalse(application.contains("${" + variable + ":"), variable + " must not have a default");
         }
+    }
+
+    @Test
+    void optionalSmtpCredentialsMustRemainEnvironmentDriven() throws IOException {
+        String application = Files.readString(RESOURCES.resolve("application.yml"));
+
+        assertTrue(application.contains("${SMTP_USERNAME:}"));
+        assertTrue(application.contains("${SMTP_PASSWORD:}"));
     }
 
     @Test

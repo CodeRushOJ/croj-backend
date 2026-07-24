@@ -56,4 +56,13 @@ class ConfigurationSecurityTest {
         assertTrue(gitignore.lines().anyMatch(".env"::equals));
         assertTrue(gitignore.lines().anyMatch("!.env.example"::equals));
     }
+
+    @Test
+    void productionConfigurationMustNotPrintSqlParametersOrRowsToStdout() throws IOException {
+        String application = Files.readString(RESOURCES.resolve("application.yml"));
+        String development = Files.readString(RESOURCES.resolve("application-dev.yml"));
+
+        assertFalse(application.contains("org.apache.ibatis.logging.stdout.StdOutImpl"));
+        assertTrue(development.contains("org.apache.ibatis.logging.stdout.StdOutImpl"));
+    }
 }

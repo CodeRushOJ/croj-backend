@@ -2,6 +2,7 @@ package com.zephyr.croj.problem;
 
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.zephyr.croj.security.JwtTokenProvider;
@@ -55,5 +56,28 @@ class AdminTestBundleApiSecurityIntegrationTest {
         String admin = tokens.createToken(9L, "admin", List.of("ADMIN"));
         mvc.perform(get(path).header("Authorization", "Bearer " + admin))
                 .andExpect(status().isOk());
+    }
+
+    @Test
+    void versionDiscoveryRequiresAnAdministratorAndReturnsDraftIdentifiers() throws Exception {
+        String path = "/v1/admin/problems/42/versions";
+        mvc.perform(get(path)).andExpect(status().isUnauthorized());
+
+        String user = tokens.createToken(7L, "user", List.of("USER"));
+        mvc.perform(get(path).header("Authorization", "Bearer " + user))
+                .andExpect(status().isForbidden());
+
+        AdminTestBundleService.View draft = new AdminTestBundleService.View(
+                42L, 101L, 1, "DRAFT", false, null, null, null,
+                "\"tb-v1-101-DRAFT-none\"");
+        List<AdminTestBundleService.View> versions = List.of(draft);
+        when(service.list(42L)).thenReturn(versions);
+        String admin = tokens.createToken(9L, "admin", List.of("ADMIN"));
+        mvc.perform(get(path).header("Authorization", "Bearer " + admin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].problemId").value(42))
+                .andExpect(jsonPath("$.data[0].versionId").value(101))
+                .andExpect(jsonPath("$.data[0].state").value("DRAFT"))
+                .andExpect(jsonPath("$.data[0].etag").value("\"tb-v1-101-DRAFT-none\""));
     }
 }

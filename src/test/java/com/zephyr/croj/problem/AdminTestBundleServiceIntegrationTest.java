@@ -9,6 +9,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
 import com.zephyr.croj.model.entity.TestBundle;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -126,5 +127,39 @@ class AdminTestBundleServiceIntegrationTest {
 
         assertEquals(422, exception.getStatus().value());
         assertEquals("test bundle is invalid or exceeds contract limits", exception.getMessage());
+    }
+
+    @Test
+    void listsDiscoverableProblemVersionsNewestFirstWithBundleStateAndEtags() {
+        jdbc.update("UPDATE t_problem_version SET state='PUBLISHED' WHERE id=101");
+        jdbc.update(
+                "INSERT INTO t_test_bundle(problem_version_id,object_key,sha256,size_bytes,manifest_json) "
+                        + "VALUES (101,'key',?,4,'{}')",
+                "a".repeat(64));
+        jdbc.update("INSERT INTO t_problem_version VALUES (102,42,2,'DRAFT',NULL)");
+
+        List<AdminTestBundleService.View> versions = service.list(42);
+
+        assertEquals(List.of(102L, 101L), versions.stream()
+                .map(AdminTestBundleService.View::versionId)
+                .toList());
+        assertEquals("\"tb-v1-102-DRAFT-none\"", versions.get(0).etag());
+        assertEquals(false, versions.get(0).attached());
+        assertEquals("\"tb-v1-101-PUBLISHED-" + "a".repeat(64) + "\"", versions.get(1).etag());
+        assertEquals(true, versions.get(1).attached());
+    }
+
+    @Test
+    void versionListReturnsNotFoundForAnUnknownOrDeletedProblem() {
+        TestBundleApiException unknown = assertThrows(
+                TestBundleApiException.class,
+                () -> service.list(999));
+        jdbc.update("UPDATE t_problem SET is_deleted=1 WHERE id=42");
+        TestBundleApiException deleted = assertThrows(
+                TestBundleApiException.class,
+                () -> service.list(42));
+
+        assertEquals(404, unknown.getStatus().value());
+        assertEquals(404, deleted.getStatus().value());
     }
 }

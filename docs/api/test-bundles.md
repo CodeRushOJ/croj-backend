@@ -64,7 +64,13 @@ ZIP 根目录必须含且只含一个 `manifest.json`，其规范化结构必须
 
 ### 为单个草稿版本上传测试包
 
-管理端先读取元数据和强 ETag：
+创建或编辑题目后，管理端先列出该题目的真实版本；响应按 `versionNo` 从新到旧排列，并返回每个版本的 `versionId`、`state`、TestBundle 元数据和当前强 ETag：
+
+```http
+GET /api/v1/admin/problems/{problemId}/versions
+```
+
+客户端必须从该列表选择 `DRAFT` 版本，不应猜测版本 ID。未知或已删除题目返回 404。选定版本后读取最新元数据和强 ETag：
 
 ```http
 GET /api/v1/admin/problems/{problemId}/versions/{versionId}/test-bundle

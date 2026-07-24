@@ -48,4 +48,18 @@ class BuildModernizationTest {
             }
         }
     }
+
+    @Test
+    void signedVersionTagsPublishImmutableMultiArchitectureImages() throws IOException {
+        String workflow = Files.readString(Path.of(".github", "workflows", "image.yml"));
+
+        assertTrue(workflow.contains("packages: write"));
+        assertTrue(workflow.contains("docker/login-action@"));
+        assertTrue(workflow.contains("github.ref_type == 'tag'"));
+        assertTrue(workflow.contains("platforms: linux/amd64,linux/arm64"));
+        assertTrue(workflow.contains("push: true"));
+        assertTrue(workflow.contains("ghcr.io/coderushoj/croj-backend:${{ github.ref_name }}"));
+        assertTrue(workflow.contains("ghcr.io/coderushoj/croj-backend:sha-${{ github.sha }}"));
+        assertFalse(workflow.contains("croj-backend:latest"));
+    }
 }

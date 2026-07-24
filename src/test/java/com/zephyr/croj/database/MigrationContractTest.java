@@ -28,6 +28,8 @@ class MigrationContractTest {
             "src", "main", "resources", "db", "migration", "V8__problem_import_jobs.sql");
     private static final Path ADMIN_BOOTSTRAP_GUARD = Path.of(
             "src", "main", "resources", "db", "migration", "V9__admin_bootstrap_guard.sql");
+    private static final Path FORUM_CATEGORY_SEED = Path.of(
+            "src", "main", "resources", "db", "migration", "V10__seed_forum_categories.sql");
 
     @Test
     void cleanSchemaCoversTheCompleteFreeOjDomain() throws IOException {
@@ -157,5 +159,18 @@ class MigrationContractTest {
         assertTrue(sql.contains("`administrator_email` varchar(100)"));
         assertTrue(sql.contains("`claimed_at` datetime(3)"));
         assertTrue(sql.contains("'first-super-admin'"));
+    }
+
+    @Test
+    void productionSchemaProvidesUsableForumCategoriesWithoutDevelopmentSeeds() throws IOException {
+        assertTrue(Files.isRegularFile(FORUM_CATEGORY_SEED));
+        String sql = Files.readString(FORUM_CATEGORY_SEED).toLowerCase();
+        assertTrue(sql.contains("insert into `t_forum_category`"));
+        assertTrue(sql.contains("'announcements'"));
+        assertTrue(sql.contains("'algorithms'"));
+        assertTrue(sql.contains("'problems'"));
+        assertTrue(sql.contains("where not exists"));
+        assertFalse(sql.contains("delete from"));
+        assertFalse(sql.contains("update `t_forum_category`"));
     }
 }

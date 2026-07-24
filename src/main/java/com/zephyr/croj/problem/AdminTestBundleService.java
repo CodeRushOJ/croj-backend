@@ -22,6 +22,43 @@ public class AdminTestBundleService {
         return load(problemId, versionId, false);
     }
 
+    @Transactional(readOnly = true)
+    public List<View> list(long problemId) {
+        Integer problemCount = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM t_problem WHERE id=? AND is_deleted=0",
+                Integer.class,
+                problemId);
+        if (problemCount == null || problemCount == 0) {
+            throw TestBundleApiException.notFound();
+        }
+        return jdbc.query(
+                """
+                SELECT pv.id,pv.problem_id,pv.version_no,pv.state,
+                       tb.sha256,tb.size_bytes,tb.manifest_json
+                FROM t_problem_version pv
+                JOIN t_problem p ON p.id=pv.problem_id AND p.is_deleted=0
+                LEFT JOIN t_test_bundle tb ON tb.problem_version_id=pv.id
+                WHERE pv.problem_id=?
+                ORDER BY pv.version_no DESC,pv.id DESC
+                """,
+                (result, row) -> {
+                    String digest = result.getString("sha256");
+                    return view(
+                            new VersionRow(
+                                    result.getLong("problem_id"),
+                                    result.getLong("id"),
+                                    result.getInt("version_no"),
+                                    result.getString("state")),
+                            digest == null
+                                    ? null
+                                    : new BundleRow(
+                                            digest,
+                                            result.getLong("size_bytes"),
+                                            result.getString("manifest_json")));
+                },
+                problemId);
+    }
+
     @Transactional
     public View upload(long problemId, long versionId, String ifMatch, byte[] archive) {
         View current = load(problemId, versionId, true);
@@ -93,8 +130,12 @@ public class AdminTestBundleService {
                         result.getString("manifest_json")),
                 versionId);
         BundleRow bundle = bundleRows.isEmpty() ? null : bundleRows.get(0);
+        return view(version, bundle);
+    }
+
+    private View view(VersionRow version, BundleRow bundle) {
         String digest = bundle == null ? "none" : bundle.sha256();
-        String etag = "\"tb-v1-%d-%s-%s\"".formatted(versionId, version.state(), digest);
+        String etag = "\"tb-v1-%d-%s-%s\"".formatted(version.versionId(), version.state(), digest);
         return new View(
                 version.problemId(),
                 version.versionId(),

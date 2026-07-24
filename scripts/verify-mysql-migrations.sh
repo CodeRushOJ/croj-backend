@@ -204,4 +204,36 @@ if [[ "$invalid_output" != *"chk_forum_resource_ref"* ]]; then
 fi
 printf 'PASS: V7 rejects GENERAL resources with a non-null resource id\n'
 
+mysql_query "
+  INSERT INTO t_forum_category (name, slug, sort_order)
+  VALUES ('Operator custom problem forum', 'problems', 999);
+" >/dev/null
+
+printf 'Upgrading the populated schema through V10\n'
+run_flyway 10
+
+flyway_versions="$(mysql_query "
+  SELECT GROUP_CONCAT(version ORDER BY installed_rank SEPARATOR ',')
+  FROM flyway_schema_history
+  WHERE type = 'SQL' AND success = 1;
+")"
+assert_equals "Flyway recorded successful V1-V10 migrations" \
+  "1,2,3,4,5,6,7,8,9,10" "$flyway_versions"
+
+category_slugs="$(mysql_query "
+  SELECT GROUP_CONCAT(slug ORDER BY sort_order, slug SEPARATOR ',')
+  FROM t_forum_category
+  WHERE slug IN ('announcements', 'algorithms', 'problems');
+")"
+assert_equals "V10 provides every production forum category" \
+  "announcements,algorithms,problems" "$category_slugs"
+
+custom_category="$(mysql_query "
+  SELECT CONCAT(name, '|', sort_order)
+  FROM t_forum_category
+  WHERE slug = 'problems';
+")"
+assert_equals "V10 preserves an operator-customized category" \
+  "Operator custom problem forum|999" "$custom_category"
+
 printf 'MySQL 8.4 Flyway migration gate passed.\n'

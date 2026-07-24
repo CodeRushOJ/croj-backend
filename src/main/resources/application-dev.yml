@@ -2,6 +2,10 @@ logging:
   level:
     com.zephyr.croj: debug
 
+mybatis-plus:
+  configuration:
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+
 spring:
   flyway:
     locations: classpath:db/migration,classpath:db/dev

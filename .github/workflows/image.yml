@@ -10,6 +10,7 @@ on:
       - mvnw
       - src/**
       - tests/container/**
+      - tests/integration/**
       - .github/workflows/image.yml
   push:
     branches:
@@ -74,7 +75,7 @@ jobs:
 
       - name: Validate shell and static container contracts
         run: |
-          shellcheck tests/container/*.sh
+          shellcheck tests/container/*.sh tests/integration/*.sh
           tests/container/production-image-contract.sh
 
       - name: Verify pinned base indexes support amd64 and arm64
@@ -113,6 +114,9 @@ jobs:
 
       - name: Inspect stopped image root filesystem
         run: tests/container/inspect-production-image.sh "coderushoj/croj-backend:${GITHUB_SHA}"
+
+      - name: Run production bootstrap against MySQL 8.4
+        run: tests/integration/admin-bootstrap-mysql84.sh "coderushoj/croj-backend:${GITHUB_SHA}"
 
       - name: Produce attested OCI image
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6

@@ -7,6 +7,8 @@
 ### Added
 
 - SMTP 环境配置同时支持本地 Mailpit 明文传输、生产 STARTTLS（587）和隐式 TLS（465），认证、TLS 与凭据不再硬编码。
+- 一次性首个超级管理员 bootstrap 模式：V9 持久化 identity guard、并发幂等创建、BCrypt 密码、审计事件和 Secret-only 生产镜像命令。
+- 生产镜像级 MySQL 8.4 bootstrap 门禁，真实执行 V1–V9、重放、冲突、不同身份并发、旧库权限 fail-closed、hash 不变性和完整日志脱敏检查。
 - 论坛主题新增 `GENERAL/PROBLEM/CONTEST` 资源关联、按资源分页过滤和 V7 前向迁移；题目/比赛详情可只加载自己的讨论。
 - 全局公告公开分页、当前公告和详情 API，严格按 UTC 发布窗口过滤并支持稳定置顶顺序。
 - 公告管理端草稿、未来排期、立即发布、撤回、归档和全生命周期筛选 API。
@@ -28,6 +30,8 @@
 
 ### Security
 
+- 全新部署不再依赖固定默认管理员密码；bootstrap guard 一经声明便拒绝所有其他身份，重跑不会提升冲突账号、复活已删除账号或静默重置凭据，命令输出经过凭据脱敏。
+- Bootstrap JDBC URL 只接受简单 MySQL host/schema 与显式非敏感参数 allowlist，拒绝 userinfo、Connector/J address/host descriptor 和嵌套连接属性；密码同时执行 Unicode 字符下限与 BCrypt 72 UTF-8 bytes 上限。
 - 论坛列表、详情、评论读取和评论发布统一复核关联资源可见性，阻止通过帖子 ID 访问隐藏题目或未公开比赛。
 - 全局公告写接口仅允许管理员和超级管理员；公开响应不泄漏操作者 ID 或内部版本号。
 - FPS XML 导入只允许官方 PUBLIC DOCTYPE 声明，同时禁用 DTD 解析、外部实体与解析器网络访问；题目、文本、测试点和内嵌图片均有硬上限，导入代码资源不会执行。

@@ -5,54 +5,50 @@ server:
 spring:
   application:
     name: coderush-oj
-  profiles:
-    active: dev
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://localhost:3306/code_rush_oj?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false
-    username: admin
-    password: admin123
-  # Redis配置
-  redis:
-    host: localhost
-    port: 6379
-    database: 0
-    timeout: 10000
-    lettuce:
-      pool:
-        max-active: 8
-        max-wait: -1
-        max-idle: 8
-        min-idle: 0
+    url: ${DATABASE_URL:jdbc:mysql://localhost:3306/code_rush_oj?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false}
+    username: ${DATABASE_USERNAME:coderushoj}
+    password: ${DATABASE_PASSWORD}
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD}
+      database: 0
+      timeout: 10s
+      lettuce:
+        pool:
+          max-active: 8
+          max-wait: -1ms
+          max-idle: 8
+          min-idle: 0
   jackson:
     date-format: yyyy-MM-dd HH:mm:ss
     time-zone: GMT+8
     serialization:
       write-dates-as-timestamps: false
   mail:
-    host: smtp.163.com
-    port: 465
+    host: ${SMTP_HOST:localhost}
+    port: ${SMTP_PORT:1025}
     protocol: smtp
     default-encoding: UTF-8
-    username: your username
-    password: your password
+    username: ${SMTP_USERNAME:}
+    password: ${SMTP_PASSWORD:}
     properties:
       mail:
         smtp:
-          auth: true
+          auth: ${SMTP_AUTH:false}
           starttls:
-            enable: true
-            required: true
+            enable: ${SMTP_STARTTLS:false}
+            required: ${SMTP_STARTTLS:false}
           ssl:
-            enable: true
-          socketFactory:
-            port: 465
-            class: javax.net.ssl.SSLSocketFactory
+            enable: ${SMTP_SSL:false}
   servlet:
     multipart:
       enabled: true
-      max-file-size: 5MB
-      max-request-size: 10MB
+      max-file-size: ${IMPORT_MAX_FILE_SIZE:256MB}
+      max-request-size: ${IMPORT_MAX_REQUEST_SIZE:260MB}
       file-size-threshold: 2KB
 
 mybatis-plus:
@@ -76,8 +72,8 @@ logging:
 
 # JWT配置
 jwt:
-  secret: ${JWT_SECRET:coderushojsecretkey123456789987654321}
-  expiration: 86400000  # 24小时
+  secret: ${JWT_SECRET}
+  expiration: 24h
   header: Authorization
   tokenPrefix: Bearer
 
@@ -103,6 +99,31 @@ springdoc:
 
 # File storage configuration
 app:
+  test-bundle:
+    enabled: ${TEST_BUNDLE_STORAGE_ENABLED:false}
+    bucket: ${TEST_BUNDLE_S3_BUCKET:coderushoj-test-bundles}
+    region: ${AWS_REGION:us-east-1}
+    endpoint: ${TEST_BUNDLE_S3_ENDPOINT:}
+    path-style: ${TEST_BUNDLE_S3_PATH_STYLE:true}
+    max-archive-bytes: ${TEST_BUNDLE_MAX_ARCHIVE_BYTES:268435456}
+    max-manifest-bytes: ${TEST_BUNDLE_MAX_MANIFEST_BYTES:1048576}
+    max-case-bytes: ${TEST_BUNDLE_MAX_CASE_BYTES:66060288}
+    max-uncompressed-bytes: ${TEST_BUNDLE_MAX_UNCOMPRESSED_BYTES:66060288}
+    max-cases: ${TEST_BUNDLE_MAX_CASES:256}
+    max-compression-ratio: ${TEST_BUNDLE_MAX_COMPRESSION_RATIO:200}
+  outbox:
+    enabled: ${OUTBOX_ENABLED:true}
+    submission-topic: ${SUBMISSION_TOPIC:submission-topic}
+    batch-size: ${OUTBOX_BATCH_SIZE:50}
+    poll-interval: ${OUTBOX_POLL_INTERVAL:PT1S}
+    claim-timeout: ${OUTBOX_CLAIM_TIMEOUT:PT30S}
+    publish-timeout: ${OUTBOX_PUBLISH_TIMEOUT:PT5S}
+  security:
+    cors:
+      allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
+      allow-credentials: true
+  judge-result:
+    service-token: ${JUDGE_RESULT_SERVICE_TOKEN}
   upload:
     # Base directory for file uploads (absolute path)
     base-dir: ${FILE_UPLOAD_DIR:uploads}
@@ -117,8 +138,19 @@ app:
 
 # RocketMQ config
 rocketmq:
-  name-server: 127.0.0.1:9876
+  name-server: ${ROCKETMQ_NAME_SERVER:127.0.0.1:9876}
   producer:
     group: submission-producer-group
   consumer:
     group: submission-consumer-group
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never

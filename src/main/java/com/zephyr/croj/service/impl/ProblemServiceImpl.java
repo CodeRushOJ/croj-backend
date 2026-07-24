@@ -3,15 +3,17 @@ package com.zephyr.croj.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import com.zephyr.croj.common.enums.ResultCodeEnum;
 import com.zephyr.croj.common.enums.UserRoleEnum;
 import com.zephyr.croj.common.exception.BusinessException;
 import com.zephyr.croj.mapper.ProblemMapper;
+import com.zephyr.croj.mapper.ProblemVersionMapper;
 import com.zephyr.croj.model.dto.ProblemCreateDTO;
 import com.zephyr.croj.model.dto.ProblemQueryDTO;
 import com.zephyr.croj.model.dto.ProblemUpdateDTO;
 import com.zephyr.croj.model.entity.Problem;
+import com.zephyr.croj.model.entity.ProblemVersion;
 import com.zephyr.croj.model.entity.User;
 import com.zephyr.croj.model.vo.ProblemListItemVO;
 import com.zephyr.croj.model.vo.ProblemTagVO;
@@ -19,6 +21,8 @@ import com.zephyr.croj.model.vo.ProblemVO;
 import com.zephyr.croj.service.ProblemService;
 import com.zephyr.croj.service.ProblemTagService;
 import com.zephyr.croj.service.UserService;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
@@ -26,6 +30,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -40,6 +46,8 @@ public class ProblemServiceImpl extends ServiceImpl<ProblemMapper, Problem> impl
 
     private final ProblemTagService problemTagService;
     private final UserService userService;
+    private final ProblemVersionMapper problemVersions;
+    private final ObjectMapper objectMapper;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -60,6 +68,10 @@ public class ProblemServiceImpl extends ServiceImpl<ProblemMapper, Problem> impl
         Problem problem = new Problem();
         BeanUtils.copyProperties(dto, problem);
 
+        // 新题先进入私有草稿；绑定隐藏测试包后再通过发布门禁公开。
+        problem.setStatus(1);
+        problem.setPublishedVersionId(null);
+
         // 设置初始值
         problem.setSubmitCount(0);
         problem.setAcceptedCount(0);
@@ -79,6 +91,8 @@ public class ProblemServiceImpl extends ServiceImpl<ProblemMapper, Problem> impl
         if (!saved) {
             throw new BusinessException(ResultCodeEnum.CREATE_ERROR);
         }
+
+        publishVersionSnapshot(problem, userId, 1);
 
         // 保存标签关联
         if (dto.getTagIds() != null && !dto.getTagIds().isEmpty()) {
@@ -102,8 +116,20 @@ public class ProblemServiceImpl extends ServiceImpl<ProblemMapper, Problem> impl
             throw new BusinessException(ResultCodeEnum.FORBIDDEN);
         }
 
+        Integer stableStatus = problem.getStatus();
+        Long stablePublishedVersionId = problem.getPublishedVersionId();
+
         // 更新问题
         BeanUtils.copyProperties(dto, problem);
+
+        // 编辑产生新的草稿版本；已有稳定版本继续对外，直到新版本原子发布。
+        if (stablePublishedVersionId == null) {
+            problem.setStatus(1);
+            problem.setPublishedVersionId(null);
+        } else {
+            problem.setStatus(stableStatus);
+            problem.setPublishedVersionId(stablePublishedVersionId);
+        }
 
         // 如果是OI模式但未设置总分，则设置默认总分100
         if (dto.getJudgeMode() != null && dto.getJudgeMode() == 1 && dto.getTotalScore() == null) {
@@ -114,6 +140,9 @@ public class ProblemServiceImpl extends ServiceImpl<ProblemMapper, Problem> impl
         if (!updated) {
             throw new BusinessException(ResultCodeEnum.UPDATE_ERROR);
         }
+
+        publishVersionSnapshot(problem, userId,
+                problemVersions.findLatestVersionNumber(problem.getId()) + 1);
 
         // 更新标签关联
         if (dto.getTagIds() != null) {
@@ -354,5 +383,58 @@ public class ProblemServiceImpl extends ServiceImpl<ProblemMapper, Problem> impl
         }
 
         return "P" + nextNumber;
+    }
+
+    private void publishVersionSnapshot(Problem problem, Long actorId, int versionNo) {
+        LocalDateTime now = LocalDateTime.now();
+        ProblemVersion version = new ProblemVersion();
+        version.setProblemId(problem.getId());
+        version.setVersionNo(versionNo);
+        version.setState("DRAFT");
+        version.setStatementJson(toJson(statementSnapshot(problem)));
+        version.setLimitsJson(toJson(limitsSnapshot(problem)));
+        version.setJudgeConfigJson(toJson(judgeSnapshot(problem)));
+        version.setCreatedBy(actorId);
+        version.setCreatedAt(now);
+        version.setPublishedAt(null);
+        if (problemVersions.insert(version) != 1) {
+            throw new BusinessException(ResultCodeEnum.CREATE_ERROR);
+        }
+    }
+
+    private Map<String, Object> statementSnapshot(Problem problem) {
+        Map<String, Object> snapshot = new LinkedHashMap<>();
+        snapshot.put("title", problem.getTitle());
+        snapshot.put("description", problem.getDescription());
+        snapshot.put("inputDescription", problem.getInputDescription());
+        snapshot.put("outputDescription", problem.getOutputDescription());
+        snapshot.put("hints", problem.getHints());
+        snapshot.put("samples", problem.getSamples());
+        return snapshot;
+    }
+
+    private Map<String, Object> limitsSnapshot(Problem problem) {
+        Map<String, Object> snapshot = new LinkedHashMap<>();
+        snapshot.put("timeLimit", problem.getTimeLimit());
+        snapshot.put("memoryLimit", problem.getMemoryLimit());
+        snapshot.put("totalScore", problem.getTotalScore());
+        return snapshot;
+    }
+
+    private Map<String, Object> judgeSnapshot(Problem problem) {
+        Map<String, Object> snapshot = new LinkedHashMap<>();
+        snapshot.put("specialJudge", problem.getIsSpecialJudge());
+        snapshot.put("specialJudgeCode", problem.getSpecialJudgeCode());
+        snapshot.put("specialJudgeLanguage", problem.getSpecialJudgeLanguage());
+        snapshot.put("judgeMode", problem.getJudgeMode());
+        return snapshot;
+    }
+
+    private String toJson(Map<String, Object> value) {
+        try {
+            return objectMapper.writeValueAsString(value);
+        } catch (JsonProcessingException exception) {
+            throw new BusinessException(ResultCodeEnum.SYSTEM_ERROR);
+        }
     }
 }

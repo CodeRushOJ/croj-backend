@@ -60,7 +60,36 @@ ZIP 根目录必须含且只含一个 `manifest.json`，其规范化结构必须
 
 ## 管理端导入 API
 
-两个接口都要求 `ADMIN` 或 `SUPER_ADMIN`：
+以下接口都要求 `ADMIN` 或 `SUPER_ADMIN`。
+
+### 为单个草稿版本上传测试包
+
+管理端先读取元数据和强 ETag：
+
+```http
+GET /api/v1/admin/problems/{problemId}/versions/{versionId}/test-bundle
+```
+
+随后携带该 ETag 上传完整的 TestBundle v1 ZIP：
+
+```http
+PUT /api/v1/admin/problems/{problemId}/versions/{versionId}/test-bundle
+If-Match: "tb-v1-{versionId}-DRAFT-none"
+Content-Type: multipart/form-data
+
+file=@test-bundle.zip
+```
+
+验证及私有对象写入成功后，响应会返回包含 SHA-256 的新 ETag。发布必须使用这个新值：
+
+```http
+POST /api/v1/admin/problems/{problemId}/versions/{versionId}/test-bundle/publish
+If-Match: "tb-v1-{versionId}-DRAFT-{sha256}"
+```
+
+`If-Match` 是必需的并且只接受单个强实体标签；缺失返回 428，格式非法返回 400，版本或测试包已被其他管理员修改返回 412。只有 `DRAFT` 版本可以接收测试包，且没有已验证 TestBundle 的版本不能发布。上传体和 ZIP 内容继续受本页所述硬限制约束；解析器内部细节不会暴露给 HTTP 客户端。
+
+### 批量题目包导入
 
 ```http
 POST /api/v1/admin/problem-imports/preflight

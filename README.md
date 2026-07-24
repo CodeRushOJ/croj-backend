@@ -83,7 +83,7 @@ Outbox 参数可通过 `.env.example` 中的 `OUTBOX_*` 变量覆盖。`OUTBOX_C
 
 论坛帖子通过 `resource_type + resource_id` 明确归属全站、公开题目或公开比赛；列表、详情和评论统一执行资源可见性校验，题目页不会混入其他题目的讨论。帖子、评论与题解的删除是状态迁移而非物理删除；公开查询只返回 `PUBLISHED`。题解记录发布时的 `problem_version_id`，确保题目后续更新不会改变历史题解所对应的题面。客户端只提交 Markdown，`content_html` 由服务端生成安全转义内容，禁止客户端注入 HTML。
 
-题目创建和编辑只生成私有 `DRAFT` 版本，不再直接公开。导入或管理流程先把规范化隐藏测试绑定为 `TestBundle`，后端以 SHA-256 生成 `test-bundles/{problemId}/{versionId}/{sha256}.zip` 对象键并写入私有 S3/MinIO 桶，随后才可通过发布门禁原子设置 `PUBLISHED` 与 `published_version_id`。配置、manifest 约束和故障模型见 [`docs/api/test-bundles.md`](docs/api/test-bundles.md)。
+题目创建和编辑只生成私有 `DRAFT` 版本，不再直接公开。导入或管理流程先把规范化隐藏测试绑定为 `TestBundle`，后端以 SHA-256 生成 `test-bundles/{problemId}/{versionId}/{sha256}.zip` 对象键并写入私有 S3/MinIO 桶，随后才可通过发布门禁原子设置 `PUBLISHED` 与 `published_version_id`。管理员既可批量导入题目，也可通过带强 `If-Match` 的 `/api/v1/admin/problems/{problemId}/versions/{versionId}/test-bundle` 接口查看、上传并发布单个草稿版本；并发覆盖会被拒绝。配置、HTTP 契约、manifest 约束和故障模型见 [`docs/api/test-bundles.md`](docs/api/test-bundles.md)。
 
 ### 题目包导入
 

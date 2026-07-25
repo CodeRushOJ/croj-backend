@@ -1,19 +1,27 @@
 package com.zephyr.croj.common.exception;
 
+import com.zephyr.croj.announcement.AnnouncementApiException;
 import com.zephyr.croj.common.enums.ResultCodeEnum;
 import com.zephyr.croj.common.response.Result;
+import com.zephyr.croj.contest.ContestApiException;
+import com.zephyr.croj.problem.importer.ProblemPackageParseException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.validation.BindException;
 import org.springframework.validation.BindingResult;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.ServletRequestBindingException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-import javax.validation.ConstraintViolation;
-import javax.validation.ConstraintViolationException;
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.ConstraintViolationException;
 import java.util.Set;
 
 /**
@@ -22,6 +30,34 @@ import java.util.Set;
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    @ExceptionHandler(AnnouncementApiException.class)
+    public ResponseEntity<Result<Void>> handleAnnouncementApiException(AnnouncementApiException exception) {
+        log.warn("公告请求失败: {}", exception.getMessage());
+        return ResponseEntity.status(exception.getStatus())
+                .body(Result.error(exception.getStatus().value() * 100, exception.getMessage()));
+    }
+
+    @ExceptionHandler(ContestApiException.class)
+    public ResponseEntity<Result<Void>> handleContestApiException(ContestApiException exception) {
+        log.warn("比赛请求失败: {}", exception.getMessage());
+        return ResponseEntity.status(exception.getStatus())
+                .body(Result.error(exception.getStatus().value() * 100, exception.getMessage()));
+    }
+
+    @ExceptionHandler(JudgeResultConflictException.class)
+    public ResponseEntity<Result<Void>> handleJudgeResultConflict(JudgeResultConflictException exception) {
+        log.warn("判题结果冲突: {}", exception.getMessage());
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(Result.error(40900, exception.getMessage()));
+    }
+
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<Result<Void>> handleAccessDenied(AccessDeniedException exception) {
+        log.warn("访问被拒绝: {}", exception.getMessage());
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(Result.error(ResultCodeEnum.FORBIDDEN.getCode(), "无权限操作"));
+    }
 
     /**
      * 处理自定义业务异常
@@ -79,6 +115,24 @@ public class GlobalExceptionHandler {
         String message = !errorMsg.isEmpty() ? errorMsg.substring(0, errorMsg.length() - 2) : "参数错误";
         log.error("参数绑定异常: {}", message);
         return Result.error(ResultCodeEnum.PARAM_ERROR.getCode(), message);
+    }
+
+    @ExceptionHandler({
+        HttpMessageNotReadableException.class,
+        MethodArgumentTypeMismatchException.class,
+        ServletRequestBindingException.class
+    })
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public Result<Void> handleMalformedRequest(Exception exception) {
+        log.warn("请求格式错误: {}", exception.getMessage());
+        return Result.error(ResultCodeEnum.PARAM_ERROR.getCode(), "请求格式错误");
+    }
+
+    @ExceptionHandler(ProblemPackageParseException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public Result<Void> handleProblemPackageParseException(ProblemPackageParseException exception) {
+        log.warn("题目包解析失败: {}", exception.getMessage());
+        return Result.error(ResultCodeEnum.PARAM_ERROR.getCode(), "题目包格式错误或超出限制");
     }
 
     /**

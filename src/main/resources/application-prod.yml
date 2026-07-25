@@ -1,0 +1,18 @@
+server:
+  shutdown: graceful
+
+spring:
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+  servlet:
+    multipart:
+      location: ${TMPDIR:/tmp}
+
+app:
+  upload:
+    base-dir: ${FILE_UPLOAD_DIR:/app/uploads}
+
+logging:
+  level:
+    com.zephyr.croj: info
+    org.springframework: warn

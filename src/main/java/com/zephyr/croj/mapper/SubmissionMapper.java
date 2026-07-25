@@ -7,6 +7,7 @@ import com.zephyr.croj.model.entity.Submission;
 import com.zephyr.croj.model.vo.SubmissionVO;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.Update;
 
 import java.util.List;
 
@@ -15,6 +16,21 @@ import java.util.List;
  */
 @Mapper
 public interface SubmissionMapper extends BaseMapper<Submission> {
+
+    @Update("""
+            UPDATE t_submission
+            SET status = #{status}, run_time = #{runTime}, memory = #{memory},
+                judge_info = #{judgeInfo}, error_message = #{errorMessage},
+                update_time = CURRENT_TIMESTAMP(3)
+            WHERE id = #{submissionId} AND status = 0 AND is_deleted = 0
+            """)
+    int completePending(
+            @Param("submissionId") long submissionId,
+            @Param("status") int status,
+            @Param("runTime") int runTime,
+            @Param("memory") int memory,
+            @Param("judgeInfo") String judgeInfo,
+            @Param("errorMessage") String errorMessage);
 
     /**
      * 获取用户在某题目的最佳提交

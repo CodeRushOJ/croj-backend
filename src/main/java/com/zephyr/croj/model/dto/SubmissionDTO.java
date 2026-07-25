@@ -2,9 +2,9 @@ package com.zephyr.croj.model.dto;
 
 import lombok.Data;
 
-import javax.validation.constraints.NotBlank;
-import javax.validation.constraints.NotNull;
-import javax.validation.constraints.Size;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import java.io.Serial;
 import java.io.Serializable;
 
@@ -22,6 +22,11 @@ public class SubmissionDTO implements Serializable {
      */
     @NotNull(message = "题目ID不能为空")
     private Long problemId;
+
+    /**
+     * 比赛ID；为空时按普通题库提交处理。
+     */
+    private Long contestId;
 
     /**
      * 编程语言

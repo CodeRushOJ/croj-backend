@@ -130,6 +130,9 @@ public class Problem implements Serializable {
      */
     private Integer status;
 
+    /** 当前对外发布的不可变题目版本。 */
+    private Long publishedVersionId;
+
     /**
      * 创建时间
      */

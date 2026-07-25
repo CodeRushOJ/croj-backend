@@ -121,7 +121,12 @@ public enum ResultCodeEnum {
     /**
      * 系统错误
      */
-    SYSTEM_ERROR(40017, "系统错误");
+    SYSTEM_ERROR(40017, "系统错误"),
+
+    /**
+     * 题目没有可供判题的已发布版本或测试数据包
+     */
+    PROBLEM_NOT_JUDGE_READY(40018, "题目尚未发布可判题版本");
 
     /**
      * 状态码

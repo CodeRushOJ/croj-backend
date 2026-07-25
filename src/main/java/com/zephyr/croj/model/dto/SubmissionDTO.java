@@ -24,6 +24,11 @@ public class SubmissionDTO implements Serializable {
     private Long problemId;
 
     /**
+     * 比赛ID；为空时按普通题库提交处理。
+     */
+    private Long contestId;
+
+    /**
      * 编程语言
      */
     @NotBlank(message = "编程语言不能为空")

@@ -99,9 +99,12 @@ public class SecurityConfig {
                                 "/webjars/**"
                         ).permitAll()
                         .requestMatchers("/uploads/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/actuator/health", "/actuator/health/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/v1/contests/*/me").authenticated()
                         .requestMatchers(HttpMethod.GET,
                                 "/v1/forum/**",
-                                "/v1/problems/*/solutions/**"
+                                "/v1/problems/*/solutions/**",
+                                "/v1/contests/**"
                         ).permitAll()
                         .requestMatchers(
                                 "/user/register",

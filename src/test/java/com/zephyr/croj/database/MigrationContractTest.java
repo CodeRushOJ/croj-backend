@@ -18,6 +18,8 @@ class MigrationContractTest {
             "src", "main", "resources", "db", "migration", "V3__community_content_api.sql");
     private static final Path JUDGE_RESULTS = Path.of(
             "src", "main", "resources", "db", "migration", "V4__judge_result_ingestion.sql");
+    private static final Path CONTEST_CORE = Path.of(
+            "src", "main", "resources", "db", "migration", "V5__contest_core.sql");
 
     @Test
     void cleanSchemaCoversTheCompleteFreeOjDomain() throws IOException {
@@ -72,5 +74,21 @@ class MigrationContractTest {
         assertTrue(sql.contains("`result_id`"));
         assertTrue(sql.contains("`payload_sha256`"));
         assertTrue(sql.contains("insert into `t_judge_attempt`"));
+    }
+
+    @Test
+    void contestCoreUsesANewForwardOnlyMigration() throws IOException {
+        assertTrue(Files.isRegularFile(CONTEST_CORE));
+        String sql = Files.readString(CONTEST_CORE).toLowerCase();
+        assertTrue(sql.contains("alter table `t_contest`"));
+        assertTrue(sql.contains("alter table `t_submission`"));
+        assertTrue(sql.contains("`contest_id` bigint"));
+        assertTrue(sql.contains("create table `t_contest_registration`"));
+        assertTrue(sql.contains("unique key `uk_contest_registration`"));
+        assertTrue(sql.contains("create table `t_contest_announcement`"));
+        assertTrue(sql.contains("create table `t_contest_clarification`"));
+        assertTrue(sql.contains("create table `t_contest_clarification_reply`"));
+        assertTrue(sql.contains("create table `t_contest_scoreboard_snapshot`"));
+        assertTrue(sql.contains("idx_submission_contest_scoreboard"));
     }
 }

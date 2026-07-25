@@ -6,8 +6,10 @@ import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import com.zephyr.croj.common.enums.ResultCodeEnum;
 import com.zephyr.croj.common.enums.SubmissionStatusEnum;
 import com.zephyr.croj.common.exception.BusinessException;
+import com.zephyr.croj.contest.ContestService;
 import com.zephyr.croj.mapper.SubmissionMapper;
 import com.zephyr.croj.mapper.JudgeAttemptMapper;
+import com.zephyr.croj.mapper.ProblemVersionMapper;
 import com.zephyr.croj.model.dto.SubmissionDTO;
 import com.zephyr.croj.model.dto.SubmissionQueryDTO;
 import com.zephyr.croj.model.entity.Problem;
@@ -25,6 +27,8 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Objects;
+
 /**
  * 提交记录服务实现类
  */
@@ -36,6 +40,8 @@ public class SubmissionServiceImpl extends ServiceImpl<SubmissionMapper, Submiss
     private final ProblemService problemService;
     private final SubmissionOutbox submissionOutbox;
     private final JudgeAttemptMapper judgeAttempts;
+    private final ContestService contestService;
+    private final ProblemVersionMapper problemVersions;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -52,14 +58,26 @@ public class SubmissionServiceImpl extends ServiceImpl<SubmissionMapper, Submiss
             throw new BusinessException(ResultCodeEnum.PROBLEM_NOT_EXIST);
         }
 
-        // 如果是非公开题目，检查用户是否有权限提交
-        if (!problem.getStatus().equals(0) && !problemService.checkPermission(problem.getId(), userId)) {
-            throw new BusinessException(ResultCodeEnum.FORBIDDEN);
-        }
-
         // 创建提交记录
         Submission submission = new Submission();
         submission.setProblemId(dto.getProblemId());
+        if (dto.getContestId() != null) {
+            // 比赛授权和锁定版本均由比赛聚合决定，不受题库当前可见性影响。
+            submission.setContestId(dto.getContestId());
+            submission.setProblemVersionId(
+                    contestService.validateSubmission(dto.getContestId(), userId, dto.getProblemId()));
+        } else {
+            // 题库提交仍遵守题目的当前公开状态和所有权。
+            if (!problem.getStatus().equals(0) && !problemService.checkPermission(problem.getId(), userId)) {
+                throw new BusinessException(ResultCodeEnum.FORBIDDEN);
+            }
+            Long publishedVersionId = problem.getPublishedVersionId();
+            if (publishedVersionId == null
+                    || !problemVersions.isJudgeReady(problem.getId(), publishedVersionId)) {
+                throw new BusinessException(ResultCodeEnum.PROBLEM_NOT_JUDGE_READY);
+            }
+            submission.setProblemVersionId(publishedVersionId);
+        }
         submission.setUserId(userId);
         submission.setLanguage(dto.getLanguage());
         submission.setCode(dto.getCode());
@@ -101,17 +119,12 @@ public class SubmissionServiceImpl extends ServiceImpl<SubmissionMapper, Submiss
         // 检查权限：只有管理员或者提交者本人可以查看代码
         User user = userService.getById(userId);
         boolean isAdmin = user != null && (user.getRole() == 1 || user.getRole() == 2);
-        boolean isOwner = userId.equals(submission.getUserId());
+        boolean isOwner = Objects.equals(userId, submission.getUserId());
 
-        // 非管理员且非提交者本人，只能查看提交基本信息，不能查看代码
-        SubmissionVO vo = convertToVO(submission);
         if (!isAdmin && !isOwner) {
-            vo.setCode(null);
-            vo.setErrorMessage(null);
-            vo.setJudgeInfo(null);
+            throw new BusinessException(ResultCodeEnum.FORBIDDEN);
         }
-
-        return vo;
+        return convertToVO(submission);
     }
 
     @Override
@@ -127,11 +140,12 @@ public class SubmissionServiceImpl extends ServiceImpl<SubmissionMapper, Submiss
         if (!isAdmin && queryDTO.getUserId() != null && !queryDTO.getUserId().equals(userId)) {
             throw new BusinessException(ResultCodeEnum.FORBIDDEN);
         }
+        Long effectiveUserId = isAdmin ? queryDTO.getUserId() : userId;
 
         // 查询提交列表
         IPage<SubmissionVO> submissionPage = baseMapper.getSubmissionList(
                 page,
-                queryDTO.getUserId(),
+                effectiveUserId,
                 queryDTO.getProblemId(),
                 queryDTO.getLanguage(),
                 queryDTO.getStatus()
@@ -144,7 +158,7 @@ public class SubmissionServiceImpl extends ServiceImpl<SubmissionMapper, Submiss
             vo.setStatusText(statusEnum != null ? statusEnum.getDesc() : "未知状态");
 
             // 非管理员且非提交者本人，不能查看代码和错误信息
-            boolean isOwner = userId.equals(vo.getUserId());
+            boolean isOwner = Objects.equals(userId, vo.getUserId());
             if (!isAdmin && !isOwner) {
                 vo.setCode(null);
                 vo.setErrorMessage(null);

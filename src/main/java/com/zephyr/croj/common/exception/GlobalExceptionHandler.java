@@ -2,9 +2,11 @@ package com.zephyr.croj.common.exception;
 
 import com.zephyr.croj.common.enums.ResultCodeEnum;
 import com.zephyr.croj.common.response.Result;
+import com.zephyr.croj.contest.ContestApiException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.validation.BindException;
 import org.springframework.validation.BindingResult;
 import org.springframework.validation.FieldError;
@@ -24,11 +26,25 @@ import java.util.Set;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    @ExceptionHandler(ContestApiException.class)
+    public ResponseEntity<Result<Void>> handleContestApiException(ContestApiException exception) {
+        log.warn("比赛请求失败: {}", exception.getMessage());
+        return ResponseEntity.status(exception.getStatus())
+                .body(Result.error(exception.getStatus().value() * 100, exception.getMessage()));
+    }
+
     @ExceptionHandler(JudgeResultConflictException.class)
     public ResponseEntity<Result<Void>> handleJudgeResultConflict(JudgeResultConflictException exception) {
         log.warn("判题结果冲突: {}", exception.getMessage());
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(Result.error(40900, exception.getMessage()));
+    }
+
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<Result<Void>> handleAccessDenied(AccessDeniedException exception) {
+        log.warn("访问被拒绝: {}", exception.getMessage());
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(Result.error(ResultCodeEnum.FORBIDDEN.getCode(), "无权限操作"));
     }
 
     /**

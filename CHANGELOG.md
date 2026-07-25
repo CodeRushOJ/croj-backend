@@ -6,6 +6,7 @@
 
 ### Added
 
+- OI 实时榜、冻结榜和最终榜：逐题取历史最高分，使用比赛固定分值校验上限，并以总分、得分题数、最后提分时间和用户 ID 生成确定性排名。
 - SMTP 环境配置同时支持本地 Mailpit 明文传输、生产 STARTTLS（587）和隐式 TLS（465），认证、TLS 与凭据不再硬编码。
 - 一次性首个超级管理员 bootstrap 模式：V9 持久化 identity guard、并发幂等创建、BCrypt 密码、审计事件和 Secret-only 生产镜像命令。
 - 生产镜像级 MySQL 8.4 bootstrap 门禁，真实执行 V1–V11、论坛分类、重放、冲突、不同身份并发、旧库权限 fail-closed、hash 不变性和完整日志脱敏检查。
@@ -59,6 +60,7 @@
 
 ### Changed
 
+- ACM/OI 榜单统一返回带 `ruleType` 的稳定结构；快照 source version 升级为 v3，纳入 OI 分数、题目固定分值和软删除状态，分数变化会使冻结缓存立即失效。
 - `prod` Profile 的 graceful shutdown phase timeout 固定为 30 秒，并将 multipart 临时目录与上传目录分别对齐 `/tmp`、`/app/uploads`。
 - 生产镜像工作流先在 Java 17 中运行完整 Maven 测试，测试失败时上传 Surefire 报告，镜像构建必须等待测试通过。
 - 经过 GitHub 验证的 `vX.Y.Z` 签名 tag 在全部门禁通过后发布 GHCR 双架构版本/commit 镜像；普通分支只保留短期 attested OCI artifact，不发布 `latest`。

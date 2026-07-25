@@ -366,10 +366,17 @@ public class ContestRepository {
                 mayReadPrivate);
     }
 
-    public List<Long> registeredUsers(long contestId) {
+    public List<Participant> registeredParticipants(long contestId) {
         return jdbc.query(
-                "SELECT user_id FROM t_contest_registration WHERE contest_id=? AND status='REGISTERED' ORDER BY user_id",
-                (result, row) -> result.getLong(1),
+                """
+                SELECT registration.user_id,participant_user.username
+                FROM t_contest_registration registration
+                JOIN t_user participant_user ON participant_user.id=registration.user_id
+                WHERE registration.contest_id=? AND registration.status='REGISTERED'
+                ORDER BY registration.user_id
+                """,
+                (result, row) -> new Participant(
+                        result.getLong("user_id"), result.getString("username")),
                 contestId);
     }
 
@@ -377,7 +384,7 @@ public class ContestRepository {
         return jdbc.query(
                 """
                 SELECT id,user_id,problem_id,status,create_time FROM t_submission
-                WHERE contest_id=? AND create_time<? ORDER BY create_time,id
+                WHERE contest_id=? AND create_time<? AND is_deleted=0 ORDER BY create_time,id
                 """,
                 (result, row) -> new AcmScoreboardCalculator.SubmissionFact(
                         result.getLong("id"),
@@ -389,14 +396,31 @@ public class ContestRepository {
                 Timestamp.from(cutoffExclusive));
     }
 
+    public List<OiScoreboardCalculator.SubmissionFact> oiSubmissionFacts(
+            long contestId, Instant cutoffExclusive) {
+        return jdbc.query(
+                """
+                SELECT id,user_id,problem_id,score,create_time FROM t_submission
+                WHERE contest_id=? AND create_time<? AND is_deleted=0 ORDER BY create_time,id
+                """,
+                (result, row) -> new OiScoreboardCalculator.SubmissionFact(
+                        result.getLong("id"),
+                        result.getLong("user_id"),
+                        result.getLong("problem_id"),
+                        nullableInteger(result, "score"),
+                        result.getTimestamp("create_time").toInstant()),
+                contestId,
+                Timestamp.from(cutoffExclusive));
+    }
+
     public String scoreboardSourceVersion(long contestId, Instant cutoffExclusive) {
         MessageDigest digest = sha256();
-        digestField(digest, "contest-scoreboard-v2");
+        digestField(digest, "contest-scoreboard-v3");
         jdbc.query(
                 """
-                SELECT id,user_id,problem_id,status,create_time
+                SELECT id,user_id,problem_id,status,score,create_time
                 FROM t_submission
-                WHERE contest_id=? AND create_time<?
+                WHERE contest_id=? AND create_time<? AND is_deleted=0
                 ORDER BY id
                 """,
                 (result, row) -> {
@@ -405,6 +429,7 @@ public class ContestRepository {
                     digestField(digest, result.getLong("user_id"));
                     digestField(digest, result.getLong("problem_id"));
                     digestField(digest, result.getInt("status"));
+                    digestField(digest, nullableInteger(result, "score"));
                     digestField(digest, result.getTimestamp("create_time").toInstant().toEpochMilli());
                     return null;
                 },
@@ -412,21 +437,23 @@ public class ContestRepository {
                 Timestamp.from(cutoffExclusive));
         jdbc.query(
                 """
-                SELECT user_id,status
-                FROM t_contest_registration
-                WHERE contest_id=?
-                ORDER BY user_id
+                SELECT registration.user_id,registration.status,participant_user.username
+                FROM t_contest_registration registration
+                LEFT JOIN t_user participant_user ON participant_user.id=registration.user_id
+                WHERE registration.contest_id=?
+                ORDER BY registration.user_id
                 """,
                 (result, row) -> {
                     digestField(digest, "registration");
                     digestField(digest, result.getLong("user_id"));
                     digestField(digest, result.getString("status"));
+                    digestField(digest, result.getString("username"));
                     return null;
                 },
                 contestId);
         jdbc.query(
                 """
-                SELECT problem_id,problem_version_id,label
+                SELECT problem_id,problem_version_id,label,score
                 FROM t_contest_problem
                 WHERE contest_id=?
                 ORDER BY label,problem_id
@@ -436,6 +463,7 @@ public class ContestRepository {
                     digestField(digest, result.getLong("problem_id"));
                     digestField(digest, result.getLong("problem_version_id"));
                     digestField(digest, result.getString("label"));
+                    digestField(digest, result.getInt("score"));
                     return null;
                 },
                 contestId);
@@ -526,6 +554,11 @@ public class ContestRepository {
         return result.wasNull() ? null : value;
     }
 
+    private Integer nullableInteger(ResultSet result, String column) throws SQLException {
+        int value = result.getInt(column);
+        return result.wasNull() ? null : value;
+    }
+
     public record ContestRecord(
             long id,
             String title,
@@ -560,6 +593,7 @@ public class ContestRepository {
             int score,
             String statementJson,
             String limitsJson) {}
+    public record Participant(long userId, String username) {}
     public record AnnouncementView(
             long id, String title, String contentMarkdown, long publishedBy, Instant publishedAt) {}
     public record ClarificationView(

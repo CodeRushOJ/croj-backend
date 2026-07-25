@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.zephyr.croj.security.JwtTokenProvider;
+import java.time.Instant;
 import java.util.List;
 import org.apache.rocketmq.spring.core.RocketMQTemplate;
 import org.junit.jupiter.api.Test;
@@ -50,6 +51,33 @@ class ContestApiSecurityIntegrationTest {
         mvc.perform(get("/v1/contests"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true));
+    }
+
+    @Test
+    void oiScoreboardContractIsAnonymousAndExplicitlyTyped() throws Exception {
+        Instant achievedAt = Instant.parse("2026-07-10T10:40:00Z");
+        var problem = new ContestScoreboardService.ProblemScore(
+                52L, "A", null, null, null, null, null, 100, 90, 5L, achievedAt);
+        var row = new ContestScoreboardService.ScoreboardRow(
+                1, 18L, "erin", null, null, null, 90, 1, achievedAt, List.of(problem));
+        when(scoreboards.publicScoreboard(2L, null))
+                .thenReturn(new ContestScoreboardService.ScoreboardView(
+                        2L,
+                        "OI",
+                        Instant.parse("2026-07-10T11:00:00Z"),
+                        true,
+                        "sha256",
+                        100,
+                        List.of(row)));
+
+        mvc.perform(get("/v1/contests/2/scoreboard"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.ruleType").value("OI"))
+                .andExpect(jsonPath("$.data.maximumScore").value(100))
+                .andExpect(jsonPath("$.data.rows[0].username").value("erin"))
+                .andExpect(jsonPath("$.data.rows[0].totalScore").value(90))
+                .andExpect(jsonPath("$.data.rows[0].solved").doesNotExist())
+                .andExpect(jsonPath("$.data.rows[0].problems[0].submissionId").value(5));
     }
 
     @Test

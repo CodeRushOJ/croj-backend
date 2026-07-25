@@ -63,7 +63,7 @@ require_pattern "$pom" '<netty.version>4\.1\.136\.Final</netty.version>' 'Netty 
 require_pattern "$pom" '<grpc.version>1\.75\.0</grpc.version>' 'gRPC security floor is missing'
 require_pattern "$pom" '<protobuf.version>3\.25\.5</protobuf.version>' 'Protobuf security floor is missing'
 require_pattern "$pom" '<commons-beanutils.version>1\.11\.0</commons-beanutils.version>' 'BeanUtils security floor is missing'
-require_pattern "$pom" '<lz4-java.version>1\.10\.1</lz4-java.version>' 'lz4-java security floor is missing'
+require_pattern "$pom" '<lz4-java.version>1\.11\.1</lz4-java.version>' 'lz4-java security floor is missing'
 require_pattern "$pom" '<groupId>at\.yawk\.lz4</groupId>' 'maintained lz4-java coordinate is required'
 require_pattern "$pom" '<artifactId>maven-enforcer-plugin</artifactId>' 'transitive vulnerability floors must be enforced'
 

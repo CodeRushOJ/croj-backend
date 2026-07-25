@@ -70,6 +70,7 @@
 
 ### Changed
 
+- 默认 JDBC 会话时区统一为 UTC，使 MySQL `CURRENT_TIMESTAMP` 与 Java `Instant` 始终位于同一时间线，避免比赛窗口、Outbox 租约等数据库时间比较产生八小时偏移。
 - S3-compatible TestBundle 与题目包上传仅在协议要求时启用 AWS SDK checksum，避免新版 SDK 默认 `CRC32`/`aws-chunked` 请求被 SeaweedFS 等兼容存储拒绝并返回 HTTP 500。
 - Release job 增加 GitHub `attestations: write` 最小权限，避免镜像推送成功后 OIDC provenance 因 API `403` 无法落库。
 - Release job 使用能按 peeled commit 比较 annotated tag 的固定 checkout 版本，避免 runner 本地 tag ref 被错误覆盖成轻量标签。

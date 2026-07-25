@@ -65,4 +65,17 @@ class ConfigurationSecurityTest {
         assertFalse(application.contains("org.apache.ibatis.logging.stdout.StdOutImpl"));
         assertTrue(development.contains("org.apache.ibatis.logging.stdout.StdOutImpl"));
     }
+
+    @Test
+    void jdbcDefaultsMustUseUtcForDatabaseAndJavaInstantConsistency() throws IOException {
+        String application = Files.readString(RESOURCES.resolve("application.yml"));
+        String environmentExample = Files.readString(Path.of(".env.example"));
+
+        for (String configuration : new String[] {application, environmentExample}) {
+            assertTrue(
+                    configuration.contains("serverTimezone=UTC"),
+                    "JDBC sessions must use UTC so MySQL CURRENT_TIMESTAMP and Java Instant share one timeline");
+            assertFalse(configuration.contains("serverTimezone=Asia/Shanghai"));
+        }
+    }
 }

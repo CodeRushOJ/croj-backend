@@ -9,10 +9,9 @@ import com.zephyr.croj.mapper.ProblemVersionMapper;
 import com.zephyr.croj.model.dto.ProblemCreateDTO;
 import com.zephyr.croj.model.entity.TestBundle;
 import com.zephyr.croj.problem.ProblemVersionPublicationService;
+import com.zephyr.croj.problem.TestBundleArchiveWriter;
 import com.zephyr.croj.problem.TestBundleService;
 import com.zephyr.croj.service.ProblemService;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -25,9 +24,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.zip.CRC32;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipOutputStream;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -215,59 +211,32 @@ public class ProblemImportService {
             List<ProblemImportCase> cases,
             int timeLimitMillis,
             int memoryLimitMiB) {
-        try {
-            List<Map<String, Object>> manifestCases = new ArrayList<>();
-            for (int index = 0; index < cases.size(); index++) {
-                int id = index + 1;
-                Map<String, Object> item = new LinkedHashMap<>();
-                item.put("id", Integer.toString(id));
-                item.put("input", "cases/%d.in".formatted(id));
-                item.put("output", "cases/%d.out".formatted(id));
-                item.put("weight", 1);
-                manifestCases.add(item);
-            }
-            Map<String, Object> manifestRoot = new LinkedHashMap<>();
-            manifestRoot.put("schemaVersion", 1);
-            manifestRoot.put("judgeMode", "ACM");
-            manifestRoot.put("checker", "exact");
-            Map<String, Object> limits = new LinkedHashMap<>();
-            limits.put("timeLimitMillis", timeLimitMillis);
-            limits.put("memoryLimitMiB", memoryLimitMiB);
-            manifestRoot.put("limits", limits);
-            manifestRoot.put("cases", manifestCases);
-            String manifest = toJson(manifestRoot);
-
-            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-            try (ZipOutputStream zip = new ZipOutputStream(bytes)) {
-                writeEntry(zip, "manifest.json", manifest.getBytes(StandardCharsets.UTF_8));
-                for (int index = 0; index < cases.size(); index++) {
-                    int id = index + 1;
-                    byte[] input = cases.get(index).input().getBytes(StandardCharsets.UTF_8);
-                    byte[] output = cases.get(index).output().getBytes(StandardCharsets.UTF_8);
-                    String inputPath = "cases/%d.in".formatted(id);
-                    String outputPath = "cases/%d.out".formatted(id);
-                    writeEntry(zip, inputPath, input);
-                    writeEntry(zip, outputPath, output);
-                }
-            }
-            return new BuiltBundle(bytes.toByteArray(), manifest);
-        } catch (IOException exception) {
-            throw new BusinessException(ResultCodeEnum.SYSTEM_ERROR);
+        List<Map<String, Object>> manifestCases = new ArrayList<>();
+        Map<String, byte[]> files = new LinkedHashMap<>();
+        for (int index = 0; index < cases.size(); index++) {
+            int id = index + 1;
+            String inputPath = "cases/%d.in".formatted(id);
+            String outputPath = "cases/%d.out".formatted(id);
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("id", Integer.toString(id));
+            item.put("input", inputPath);
+            item.put("output", outputPath);
+            item.put("weight", 1);
+            manifestCases.add(item);
+            files.put(inputPath, cases.get(index).input().getBytes(StandardCharsets.UTF_8));
+            files.put(outputPath, cases.get(index).output().getBytes(StandardCharsets.UTF_8));
         }
-    }
-
-    private void writeEntry(ZipOutputStream zip, String path, byte[] content) throws IOException {
-        ZipEntry entry = new ZipEntry(path);
-        entry.setTime(0L);
-        CRC32 crc = new CRC32();
-        crc.update(content);
-        entry.setMethod(ZipEntry.STORED);
-        entry.setSize(content.length);
-        entry.setCompressedSize(content.length);
-        entry.setCrc(crc.getValue());
-        zip.putNextEntry(entry);
-        zip.write(content);
-        zip.closeEntry();
+        Map<String, Object> manifestRoot = new LinkedHashMap<>();
+        manifestRoot.put("schemaVersion", 1);
+        manifestRoot.put("judgeMode", "ACM");
+        manifestRoot.put("checker", "exact");
+        Map<String, Object> limits = new LinkedHashMap<>();
+        limits.put("timeLimitMillis", timeLimitMillis);
+        limits.put("memoryLimitMiB", memoryLimitMiB);
+        manifestRoot.put("limits", limits);
+        manifestRoot.put("cases", manifestCases);
+        String manifest = toJson(manifestRoot);
+        return new BuiltBundle(new TestBundleArchiveWriter().write(manifest, files), manifest);
     }
 
     static boolean caseContentsFit(List<ProblemImportCase> cases, long maximumBytes) {

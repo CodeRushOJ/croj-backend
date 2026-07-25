@@ -78,19 +78,26 @@ class ProblemVersionPublicationIntegrationTest {
     }
 
     @Test
-    void refusesToPublishAManuallyAttachedOiBundle() {
+    void publishesAValidatedOiBundleV2WithMatchingImmutableTotalScore() {
         jdbc.update(
-                "UPDATE t_problem_version SET judge_config_json='{\"judgeMode\":1,\"specialJudge\":false,\"checker\":\"exact\"}' WHERE id=101");
+                "UPDATE t_problem_version SET judge_config_json='{\"judgeMode\":1,\"specialJudge\":false,\"specialJudgeCode\":null,\"specialJudgeLanguage\":null,\"checker\":\"exact\",\"difficulty\":2}' WHERE id=101");
         jdbc.update(
                 "INSERT INTO t_test_bundle VALUES (7,101,'test-bundles/42/101/a.zip',REPEAT('a',64),12,?)",
-                validManifest());
+                """
+                {"schemaVersion":2,"judgeMode":"OI","checker":"exact",
+                 "limits":{"timeLimitMillis":1000,"memoryLimitMiB":64},"totalScore":100,
+                 "cases":[
+                  {"id":"1","input":"cases/1.in","output":"cases/1.out","weight":30},
+                  {"id":"2","input":"cases/2.in","output":"cases/2.out","weight":70}
+                 ]}
+                """);
         ProblemVersionPublicationService service = new ProblemVersionPublicationService(jdbc);
 
-        assertThrows(BusinessException.class, () -> service.publish(42L, 101L));
+        service.publish(42L, 101L);
 
-        assertEquals("DRAFT", jdbc.queryForObject(
+        assertEquals("PUBLISHED", jdbc.queryForObject(
                 "SELECT state FROM t_problem_version WHERE id=101", String.class));
-        assertNull(jdbc.queryForObject(
+        assertEquals(101L, jdbc.queryForObject(
                 "SELECT published_version_id FROM t_problem WHERE id=42", Long.class));
     }
 

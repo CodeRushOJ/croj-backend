@@ -32,7 +32,7 @@ concurrency:
 
 jobs:
   flyway-upgrade:
-    name: Flyway V1-V11 on MySQL 8.4
+    name: Flyway V1-V13 on MySQL 8.4
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
@@ -55,5 +55,5 @@ jobs:
       - name: Validate migration verifier shell
         run: shellcheck scripts/verify-mysql-migrations.sh
 
-      - name: Upgrade populated V6 data through V11
+      - name: Upgrade populated V6 data through V13
         run: scripts/verify-mysql-migrations.sh

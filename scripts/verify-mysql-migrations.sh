@@ -299,6 +299,11 @@ mysql_query "
     42, CURRENT_TIMESTAMP(3)
   );
   UPDATE t_problem SET published_version_id = 9201 WHERE id = 9002;
+  UPDATE t_problem
+  SET is_special_judge = 1,
+      special_judge_code = 'int main(){return 0;}',
+      special_judge_language = 'cpp'
+  WHERE id = 9002;
 " >/dev/null
 
 legacy_version_hashes_before="$(mysql_query "
@@ -319,16 +324,44 @@ legacy_version_hashes_before="$(mysql_query "
   WHERE problem_id = 9001;
 ")"
 
-printf 'Upgrading the populated schema through V11\n'
-run_flyway 11
+printf 'Upgrading the populated schema through V13\n'
+run_flyway 13
 
 flyway_versions="$(mysql_query "
   SELECT GROUP_CONCAT(version ORDER BY installed_rank SEPARATOR ',')
   FROM flyway_schema_history
   WHERE type = 'SQL' AND success = 1;
 ")"
-assert_equals "Flyway recorded successful V1-V11 migrations" \
-  "1,2,3,4,5,6,7,8,9,10,11" "$flyway_versions"
+assert_equals "Flyway recorded successful V1-V13 migrations" \
+  "1,2,3,4,5,6,7,8,9,10,11,12,13" "$flyway_versions"
+
+checker_backfill="$(mysql_query "
+  SELECT GROUP_CONCAT(CONCAT(id, ':', checker) ORDER BY id SEPARATOR ',')
+  FROM t_problem
+  WHERE id IN (9001, 9002);
+")"
+assert_equals "V12 backfills exact and special mutable checker configuration" \
+  "9001:exact,9002:special" "$checker_backfill"
+
+if invalid_output="$(mysql_query "
+  UPDATE t_problem SET checker='special' WHERE id=9001;
+" 2>&1)"; then
+  fail "V12 accepted special checker for a non-SPJ problem"
+fi
+if [[ "$invalid_output" != *"chk_problem_special_checker"* ]]; then
+  fail "invalid checker/SPJ pairing failed for an unexpected reason: $invalid_output"
+fi
+printf 'PASS: V12 rejects checker and special-judge disagreement\n'
+
+scoreboard_index_columns="$(mysql_query "
+  SELECT GROUP_CONCAT(column_name ORDER BY seq_in_index SEPARATOR ',')
+  FROM information_schema.statistics
+  WHERE table_schema = '${MYSQL_DATABASE}'
+    AND table_name = 't_submission'
+    AND index_name = 'idx_submission_contest_time';
+")"
+assert_equals "V13 installs the exact contest scoreboard lookup index order" \
+  "contest_id,is_deleted,create_time,id" "$scoreboard_index_columns"
 
 category_slugs="$(mysql_query "
   SELECT GROUP_CONCAT(slug ORDER BY sort_order, slug SEPARATOR ',')

@@ -9,9 +9,13 @@
 - OI 实时榜、冻结榜和最终榜：逐题取历史最高分，使用比赛固定分值校验上限，并以总分、得分题数、最后提分时间和用户 ID 生成确定性排名。
 - SMTP 环境配置同时支持本地 Mailpit 明文传输、生产 STARTTLS（587）和隐式 TLS（465），认证、TLS 与凭据不再硬编码。
 - 一次性首个超级管理员 bootstrap 模式：V9 持久化 identity guard、并发幂等创建、BCrypt 密码、审计事件和 Secret-only 生产镜像命令。
-- 生产镜像级 MySQL 8.4 bootstrap 门禁，真实执行 V1–V11、论坛分类、重放、冲突、不同身份并发、旧库权限 fail-closed、hash 不变性和完整日志脱敏检查。
+- 生产镜像级 MySQL 8.4 bootstrap 门禁，真实执行 V1–V13、论坛分类、重放、冲突、不同身份并发、旧库权限 fail-closed、hash 不变性和完整日志脱敏检查。
 - 真实 MySQL 8.4 Flyway V1-V7 升级门禁：在一次性数据库中验证旧论坛数据回填、V7 `CHECK` 约束、精确复合索引及非法资源关联拒绝，并提供本地与 CI 共用脚本。
 - TestBundle 与 Judging Server 统一使用严格 manifest v1；题包现在内嵌同一 `manifest.json`，并对未知字段、单用例、总展开大小及跨副本不一致 fail-closed。
+- TestBundle manifest v2 完整闭环：ACM/OI、exact/token/special checker、正权重总分不变量、SPJ 源码 SHA-256 与独立资源限制，同时永久兼容 v1。
+- V12 为可变题目持久化受约束的 checker，创建/编辑时冻结进不可变版本；公共题目只返回安全 checker 标识，checker source 仍仅由管理员专用端点读取。
+- V13 为 OI/ACM 比赛榜单按 `contest_id,is_deleted,create_time,id` 的时间窗扫描增加精确复合索引，并纳入真实 MySQL 8.4 列序门禁。
+- 后端官方 deterministic TestBundle writer：固定 ZIP 时间/权限/entry 顺序并统一使用 level-0 DEFLATE，避免高重复用例触发自身压缩比门禁；导入 producer 与 Judging consumer 使用同一份 artifact、manifest 和 SHA-256。
 - 论坛主题新增 `GENERAL/PROBLEM/CONTEST` 资源关联、按资源分页过滤和 V7 前向迁移；题目/比赛详情可只加载自己的讨论。
 - 全局公告公开分页、当前公告和详情 API，严格按 UTC 发布窗口过滤并支持稳定置顶顺序。
 - 公告管理端草稿、未来排期、立即发布、撤回、归档和全生命周期筛选 API。
@@ -55,7 +59,7 @@
 - 题目创建和编辑强制先进入 DRAFT，阻止无隐藏测试包的版本绕过门禁公开。
 - 已发布题目编辑会保留当前 `published_version_id` 与公开状态，只有新草稿完成 TestBundle 门禁后才切换发布指针。
 - 单题测试包上传和发布要求一个强 `If-Match`；缺失、弱标签、多标签或已过期标签都会 fail-closed，ZIP 解析细节不会泄露给客户端。
-- TestBundle v1 attach 与 publish 双重验证不可变版本必须为投影完整的 ACM 非 SPJ 配置，并要求 checker、时间和内存限制与 manifest 完全一致；OI、SPJ、手工插入或不完整历史版本不能绕过发布门禁。
+- TestBundle v1/v2 attach 与 publish 双重验证不可变版本与 manifest 的模式、checker、限制、OI 总分及 SPJ 源码完全一致；手工插入或不完整历史版本不能绕过发布门禁。
 - 历史题目投影迁移不再从当前可变 `t_problem` 回填旧版本；不确定版本保留用于审计，但公开指针会被清空，避免把最新草稿伪装成旧版本。
 
 ### Changed
@@ -67,7 +71,7 @@
 - 生产镜像工作流先在 Java 17 中运行完整 Maven 测试，测试失败时上传 Surefire 报告，镜像构建必须等待测试通过。
 - 经过 GitHub 验证的 `vX.Y.Z` 签名 tag 在全部门禁通过后发布 GHCR 双架构版本/commit 镜像；普通分支只保留短期 attested OCI artifact，不发布 `latest`。
 - 管理端跨域预检允许 `If-Match`，浏览器现在可以调用公告等使用乐观并发控制的写接口。
-- v1 明确要求从全新 MySQL schema 执行 Flyway V1–V11；没有 Flyway history 的非空手工 `db.sql` 原型库不支持原地升级，历史数据必须走单独审计迁移。
+- v1 明确要求从全新 MySQL schema 执行 Flyway V1–V13；没有 Flyway history 的非空手工 `db.sql` 原型库不支持原地升级，历史数据必须走单独审计迁移。
 
 ## [0.3.0] - 2026-07-18
 

@@ -2,6 +2,7 @@ package com.zephyr.croj.problem;
 
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zephyr.croj.common.enums.ResultCodeEnum;
@@ -90,19 +91,33 @@ public class TestBundleService {
 
     private String validateManifest(String manifestJson, ProblemVersion version) {
         try {
-            return new TestBundleV1Contract(objectMapper)
+            return new TestBundleManifestContract(objectMapper)
                     .validateAndCanonicalize(version, manifestJson, properties.getMaxCases());
-        } catch (TestBundleV1Contract.ContractViolation exception) {
+        } catch (TestBundleManifestContract.ContractViolation exception) {
             throw invalidBundle(exception.getMessage());
         }
     }
 
     private ObjectMapper strictObjectMapper() {
-        return objectMapper.copy().enable(JsonParser.Feature.STRICT_DUPLICATE_DETECTION);
+        return objectMapper
+                .copy()
+                .enable(JsonParser.Feature.STRICT_DUPLICATE_DETECTION)
+                .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
     }
 
     private void validateArchive(byte[] archive, String canonicalManifest) {
         assertZipSignature(archive);
+        JsonNode manifestRoot;
+        try {
+            manifestRoot = objectMapper.readTree(canonicalManifest);
+        } catch (JsonProcessingException exception) {
+            throw invalidBundle("test bundle manifest is invalid");
+        }
+        JsonNode specialJudge = manifestRoot.get("specialJudge");
+        String checkerSource =
+                specialJudge == null ? null : specialJudge.get("source").textValue();
+        String checkerSourceSha256 =
+                specialJudge == null ? null : specialJudge.get("sourceSha256").textValue();
         Set<String> expectedEntries = expectedArchiveEntries(canonicalManifest);
         Set<String> names = new HashSet<>();
         long totalBytes = 0;
@@ -121,19 +136,26 @@ public class TestBundleService {
                     throw invalidBundle("test bundle contains an undeclared ZIP entry");
                 }
                 boolean manifest = "manifest.json".equals(name);
+                boolean checker = name.equals(checkerSource);
                 long entryLimit = manifest
                         ? properties.getMaxManifestBytes()
-                        : properties.getMaxCaseBytes();
+                        : checker
+                                ? TestBundleManifestContract.MAX_SPECIAL_JUDGE_SOURCE_BYTES
+                                : properties.getMaxCaseBytes();
                 assertCentralDirectoryLimits(entry, entryLimit);
                 totalBytes = Math.addExact(totalBytes, entry.getSize());
                 if (totalBytes > properties.getMaxUncompressedBytes()) {
                     throw invalidBundle("test bundle ZIP contents exceed declared limits");
                 }
-                byte[] contents = readEntry(zip, entry, entryLimit, !manifest);
+                byte[] contents = readEntry(zip, entry, entryLimit, !manifest, manifest || checker);
                 if (manifest
-                        && !objectMapper.readTree(canonicalManifest)
+                        && !strictObjectMapper()
+                                .readTree(canonicalManifest)
                                 .equals(strictObjectMapper().readTree(contents))) {
                     throw invalidBundle("manifest.json disagrees with database manifest");
+                }
+                if (checker && !checkerSourceSha256.equals(sha256(contents))) {
+                    throw invalidBundle("special judge source digest mismatch");
                 }
             }
         } catch (IOException | ArithmeticException exception) {
@@ -151,6 +173,11 @@ public class TestBundleService {
             for (JsonNode testCase : objectMapper.readTree(canonicalManifest).get("cases")) {
                 expected.add(testCase.get("input").textValue());
                 expected.add(testCase.get("output").textValue());
+            }
+            JsonNode specialJudge =
+                    objectMapper.readTree(canonicalManifest).get("specialJudge");
+            if (specialJudge != null) {
+                expected.add(specialJudge.get("source").textValue());
             }
             return expected;
         } catch (JsonProcessingException exception) {
@@ -180,7 +207,8 @@ public class TestBundleService {
                     zip,
                     manifest,
                     properties.getMaxManifestBytes(),
-                    false));
+                    false,
+                    true));
         } catch (IOException | ArithmeticException exception) {
             throw invalidBundle("test bundle ZIP archive is invalid");
         }
@@ -238,9 +266,9 @@ public class TestBundleService {
             ZipFile zip,
             ZipArchiveEntry entry,
             long sizeLimit,
-            boolean validateUtf8) throws IOException {
-        ByteArrayOutputStream captured =
-                "manifest.json".equals(entry.getName()) ? new ByteArrayOutputStream() : null;
+            boolean validateUtf8,
+            boolean capture) throws IOException {
+        ByteArrayOutputStream captured = capture ? new ByteArrayOutputStream() : null;
         CharsetDecoder decoder = validateUtf8 ? strictUtf8Decoder() : null;
         ByteBuffer pending = validateUtf8 ? ByteBuffer.allocate(8196) : null;
         CharBuffer characters = validateUtf8 ? CharBuffer.allocate(8192) : null;

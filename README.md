@@ -63,7 +63,7 @@ SMTP_SSL=true
 
 Flyway 在应用启动时按顺序执行 `src/main/resources/db/migration` 中的生产迁移；`dev` Profile 额外加载可重复执行的标签与论坛分类种子。已经发布的版本迁移不可修改，结构变更必须新增更高版本迁移。
 
-v1 发布版以全新的 MySQL schema 为安装合同。早期原型使用仓库根目录手工 `db.sql` 建表，没有 Flyway schema history，非空原型库不能直接原地升级为 v1。当前项目没有生产数据时，应创建新 schema、由 Flyway 执行 V1–V11，再通过一次性 bootstrap 建立首个管理员；如需保留历史原型数据，必须先导出并经过单独、可审计的数据迁移，不能通过 `baseline-on-migrate` 跳过 V1。V10 会为生产环境补齐公告、算法交流和题目讨论三个基础论坛分类，创建帖子不依赖 `dev` Profile。V11 不会用当前草稿字段改写历史快照：它为版本增加 `projection_complete`，只认可版本自身已包含全部公开投影的记录，并把指向不完整版本的题目转为私有、清空公开指针。恢复步骤见 [`docs/migrations/V11-problem-version-projections.md`](docs/migrations/V11-problem-version-projections.md)。
+v1 发布版以全新的 MySQL schema 为安装合同。早期原型使用仓库根目录手工 `db.sql` 建表，没有 Flyway schema history，非空原型库不能直接原地升级为 v1。当前项目没有生产数据时，应创建新 schema、由 Flyway 执行 V1–V13，再通过一次性 bootstrap 建立首个管理员；如需保留历史原型数据，必须先导出并经过单独、可审计的数据迁移，不能通过 `baseline-on-migrate` 跳过 V1。V10 会为生产环境补齐公告、算法交流和题目讨论三个基础论坛分类，创建帖子不依赖 `dev` Profile。V11 不会用当前草稿字段改写历史快照：它为版本增加 `projection_complete`，只认可版本自身已包含全部公开投影的记录，并把指向不完整版本的题目转为私有、清空公开指针。V12 在可变题目上持久化受约束的 `exact|token|special` checker，并在创建新版本时冻结到 `judge_config_json`。V13 为按比赛、删除标记、提交时间和 ID 扫描的榜单查询增加有序复合索引。恢复步骤见 [`docs/migrations/V11-problem-version-projections.md`](docs/migrations/V11-problem-version-projections.md)。
 
 提交数据库迁移前必须运行真实 MySQL 兼容门禁：
 
@@ -71,7 +71,7 @@ v1 发布版以全新的 MySQL schema 为安装合同。早期原型使用仓库
 scripts/verify-mysql-migrations.sh
 ```
 
-该命令只要求 Docker，不要求宿主机安装 Java、Maven 或 MySQL 客户端。脚本在私有 Docker network 中启动一次性 MySQL 8.4.10 和 Java 容器，先用 Flyway 将空库迁到 V6，写入旧版论坛数据，再升级到 V7 并最终迁到 V11；随后验证完整 V1–V11 历史、旧帖 `GENERAL/NULL` 回填、`CHECK` 约束、复合索引顺序、非法资源关联拒绝、生产论坛分类、既有运维自定义分类不被覆盖，以及历史题目版本 JSON 哈希不变、不完整投影失败关闭、审计后新版本恢复公开。脚本退出时自动删除数据库容器与 network，Maven 依赖保存在被 Git 忽略的 `.cache/maven`。
+该命令只要求 Docker，不要求宿主机安装 Java、Maven 或 MySQL 客户端。脚本在私有 Docker network 中启动一次性 MySQL 8.4.10 和 Java 容器，先用 Flyway 将空库迁到 V6，写入旧版论坛数据，再升级到 V7 并最终迁到 V13；随后验证完整 V1–V13 历史、旧帖 `GENERAL/NULL` 回填、`CHECK` 约束、复合索引精确列序、非法资源关联拒绝、checker/SPJ 约束、榜单查询索引、生产论坛分类、既有运维自定义分类不被覆盖，以及历史题目版本 JSON 哈希不变、不完整投影失败关闭、审计后新版本恢复公开。脚本退出时自动删除数据库容器与 network，Maven 依赖保存在被 Git 忽略的 `.cache/maven`。
 
 CI 使用 digest 固定的 MySQL 8.4.10 与 Java 镜像。排查镜像代理或预拉取问题时，可临时通过 `MYSQL_IMAGE`、`MAVEN_IMAGE`、`MAVEN_CACHE_DIR` 和 `MYSQL_START_TIMEOUT_SECONDS` 覆盖默认值；这些变量只控制一次性测试环境，不能用于传入生产凭据。
 
@@ -87,7 +87,9 @@ Outbox 参数可通过 `.env.example` 中的 `OUTBOX_*` 变量覆盖。`OUTBOX_C
 
 题目创建和编辑只生成私有 `DRAFT` 版本，不再直接公开。每个版本在 `statement_json.tags` 中冻结有序的 `{id,name,color}` 标签，在 `judge_config_json` 中冻结判题配置和私有 checker source；公开 `ProblemVO` 类型根本不包含 checker source。管理员只有通过受 `ADMIN/SUPER_ADMIN` 保护的 `/api/v1/admin/problems/{problemId}/versions/{versionId}/source` 才能审计指定不可变版本的 checker。
 
-导入或管理流程先把规范化隐藏测试绑定为 `TestBundle`，后端以 SHA-256 生成 `test-bundles/{problemId}/{versionId}/{sha256}.zip` 对象键并写入私有 S3/MinIO 桶。当前 TestBundle v1 只接受投影完整的 ACM、非 SPJ 版本，且版本与 manifest 的 checker、时间和内存限制必须一致；attach 在接触对象存储前校验，publish 会对数据库中已经保存的 manifest 再次校验，手工写库不能绕过。发布事务随后原子设置 `PUBLISHED`、切换 `published_version_id` 并把可见标签关系替换为版本快照。管理员先通过 `/api/v1/admin/problems/{problemId}/versions` 发现真实版本 ID 和状态，再使用带强 `If-Match` 的 `/api/v1/admin/problems/{problemId}/versions/{versionId}/test-bundle` 接口查看、上传并发布单个草稿版本；并发覆盖会被拒绝。配置、HTTP 契约、manifest 约束和故障模型见 [`docs/api/test-bundles.md`](docs/api/test-bundles.md)。
+导入或管理流程先把规范化隐藏测试绑定为 `TestBundle`，后端以 SHA-256 生成 `test-bundles/{problemId}/{versionId}/{sha256}.zip` 对象键并写入私有 S3/MinIO 桶。TestBundle v1 永久兼容 ACM exact/token；v2 支持 ACM/OI、exact/token/special、正权重总分和隔离 SPJ。版本与 manifest 的模式、checker、时间/内存、OI totalScore 以及 SPJ source/language/SHA-256 必须一致；attach 在接触对象存储前校验，publish 会对数据库中已经保存的 manifest 再次校验，手工写库不能绕过。发布事务随后原子设置 `PUBLISHED`、切换 `published_version_id` 并把可见标签关系替换为版本快照。管理员先通过 `/api/v1/admin/problems/{problemId}/versions` 发现真实版本 ID 和状态，再使用带强 `If-Match` 的 `/api/v1/admin/problems/{problemId}/versions/{versionId}/test-bundle` 接口查看、上传并发布单个草稿版本；并发覆盖会被拒绝。配置、HTTP 契约、manifest 约束和故障模型见 [`docs/api/test-bundles.md`](docs/api/test-bundles.md)。
+
+Backend 与固定 Judging consumer 的真实 ZIP 契约可通过 `scripts/verify-test-bundle-contract.sh` 验证。默认从相邻 `croj-judging-server` checkout 读取 `c56bc7b`；非相邻目录可设置 `JUDGING_REPOSITORY=/absolute/path/to/croj-judging-server`。门禁会分别生成 v1 与 OI/SPJ v2 artifact，再由 Judging 的 archive loader 实际解析并读取。
 
 ### 题目包导入
 
@@ -113,7 +115,7 @@ docker run --rm \
 
 生产部署由 `croj-platform` 固定镜像、注入 Kubernetes Secret 并运行跨仓库验收。不要把真实凭据写回 `application*.yml`。
 
-首个管理员还有一条生产镜像级 MySQL 8.4 回归门禁。它在临时网络和全新 schema 上执行 V1–V11、验证生产论坛分类、创建管理员、改密参数重放、不同身份冲突、并发不同身份、旧库已有超级管理员时 fail-closed 与全输出 Secret 扫描：
+首个管理员还有一条生产镜像级 MySQL 8.4 回归门禁。它在临时网络和全新 schema 上执行 V1–V13、验证生产论坛分类、创建管理员、改密参数重放、不同身份冲突、并发不同身份、旧库已有超级管理员时 fail-closed 与全输出 Secret 扫描：
 
 ```bash
 tests/integration/admin-bootstrap-mysql84.sh coderushoj/croj-backend:<tested-tag>

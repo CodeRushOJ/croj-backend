@@ -21,6 +21,7 @@ class ConfigurationSecurityTest {
             "JWT_SECRET",
             "SMTP_PASSWORD",
             "REDIS_PASSWORD",
+            "JUDGE_RESULT_SERVICE_TOKEN",
         }) {
             assertTrue(application.contains("${" + variable + "}"), variable + " must be required");
             assertFalse(application.contains("${" + variable + ":"), variable + " must not have a default");

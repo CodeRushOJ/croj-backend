@@ -26,15 +26,16 @@ class OutboxPublisherTest {
         OutboxEvent event = new OutboxEvent();
         event.setId("event-1");
         event.setAggregateId(99L);
+        event.setPayload("{\"schemaVersion\":1,\"eventId\":\"event-1\",\"submissionId\":99,\"attemptNo\":1}");
         SendResult sendResult = mock(SendResult.class);
         when(sendResult.getSendStatus()).thenReturn(SendStatus.SEND_OK);
         when(mapper.claimNext(anyString(), eq(30L))).thenReturn(1, 0);
         when(mapper.findClaimed(anyString())).thenReturn(event);
-        when(rocketMq.syncSend("submission-topic", "99", 5000L)).thenReturn(sendResult);
+        when(rocketMq.syncSend("submission-topic", event.getPayload(), 5000L)).thenReturn(sendResult);
 
         new OutboxPublisher(mapper, rocketMq, properties).publishPending();
 
-        verify(rocketMq).syncSend("submission-topic", "99", 5000L);
+        verify(rocketMq).syncSend("submission-topic", event.getPayload(), 5000L);
         verify(mapper).markPublished(eq("event-1"), anyString());
     }
 
@@ -45,11 +46,12 @@ class OutboxPublisherTest {
         OutboxEvent event = new OutboxEvent();
         event.setId("event-2");
         event.setAggregateId(100L);
+        event.setPayload("{\"schemaVersion\":1,\"eventId\":\"event-2\",\"submissionId\":100,\"attemptNo\":1}");
         event.setAttempts(2);
         when(mapper.claimNext(anyString(), eq(30L))).thenReturn(1, 0);
         when(mapper.findClaimed(anyString())).thenReturn(event);
         doThrow(new IllegalStateException("broker unavailable"))
-                .when(rocketMq).syncSend("submission-topic", "100", 5000L);
+                .when(rocketMq).syncSend("submission-topic", event.getPayload(), 5000L);
 
         new OutboxPublisher(mapper, rocketMq, new OutboxProperties()).publishPending();
 
@@ -64,12 +66,13 @@ class OutboxPublisherTest {
         OutboxEvent event = new OutboxEvent();
         event.setId("event-3");
         event.setAggregateId(101L);
+        event.setPayload("{\"schemaVersion\":1,\"eventId\":\"event-3\",\"submissionId\":101,\"attemptNo\":1}");
         event.setAttempts(0);
         SendResult sendResult = mock(SendResult.class);
         when(sendResult.getSendStatus()).thenReturn(SendStatus.FLUSH_DISK_TIMEOUT);
         when(mapper.claimNext(anyString(), eq(30L))).thenReturn(1, 0);
         when(mapper.findClaimed(anyString())).thenReturn(event);
-        when(rocketMq.syncSend("submission-topic", "101", 5000L)).thenReturn(sendResult);
+        when(rocketMq.syncSend("submission-topic", event.getPayload(), 5000L)).thenReturn(sendResult);
 
         new OutboxPublisher(mapper, rocketMq, new OutboxProperties()).publishPending();
 

@@ -34,6 +34,9 @@ class DatabaseSubmissionOutboxTest {
         assertEquals("SUBMISSION", event.getValue().getAggregateType());
         assertEquals(99L, event.getValue().getAggregateId());
         assertEquals("SubmissionRequested", event.getValue().getEventType());
+        assertTrue(event.getValue().getPayload().contains("\"schemaVersion\":1"));
+        assertTrue(event.getValue().getPayload().contains("\"eventId\":\"" + event.getValue().getId() + "\""));
+        assertTrue(event.getValue().getPayload().contains("\"attemptNo\":1"));
         assertTrue(event.getValue().getPayload().contains("\"submissionId\":99"));
     }
 }

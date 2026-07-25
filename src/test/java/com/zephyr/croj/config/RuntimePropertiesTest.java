@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import com.zephyr.croj.config.properties.CorsProperties;
 import com.zephyr.croj.config.properties.JwtProperties;
+import com.zephyr.croj.config.properties.JudgeResultProperties;
 import java.time.Duration;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -31,5 +32,13 @@ class RuntimePropertiesTest {
 
         CorsProperties properties = new CorsProperties(List.of("http://localhost:3000"), true);
         assertEquals(List.of("http://localhost:3000"), properties.allowedOrigins());
+    }
+
+    @Test
+    void judgeServiceTokenMustProvideAtLeast256BitsOfInput() {
+        assertThrows(IllegalArgumentException.class, () -> new JudgeResultProperties("too-short"));
+        JudgeResultProperties properties = new JudgeResultProperties(
+                "test-only-judge-token-with-at-least-32-bytes");
+        assertEquals("test-only-judge-token-with-at-least-32-bytes", properties.serviceToken());
     }
 }

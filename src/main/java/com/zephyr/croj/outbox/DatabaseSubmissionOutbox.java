@@ -25,16 +25,19 @@ public class DatabaseSubmissionOutbox implements SubmissionOutbox {
         event.setAggregateType("SUBMISSION");
         event.setAggregateId(submission.getId());
         event.setEventType("SubmissionRequested");
-        event.setPayload(serialize(submission));
+        event.setPayload(serialize(event.getId(), submission));
         event.setAttempts(0);
         if (mapper.insert(event) != 1) {
             throw new IllegalStateException("Failed to persist submission outbox event");
         }
     }
 
-    private String serialize(Submission submission) {
+    private String serialize(String eventId, Submission submission) {
         Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("schemaVersion", 1);
+        payload.put("eventId", eventId);
         payload.put("submissionId", submission.getId());
+        payload.put("attemptNo", 1);
         payload.put("problemId", submission.getProblemId());
         payload.put("userId", submission.getUserId());
         payload.put("language", submission.getLanguage());

@@ -4,6 +4,7 @@ import com.zephyr.croj.config.properties.CorsProperties;
 import com.zephyr.croj.security.JwtAccessDeniedHandler;
 import com.zephyr.croj.security.JwtAuthenticationEntryPoint;
 import com.zephyr.croj.security.JwtAuthenticationFilter;
+import com.zephyr.croj.security.JudgeServiceTokenFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -38,6 +39,7 @@ public class SecurityConfig {
     private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
     private final JwtAccessDeniedHandler jwtAccessDeniedHandler;
     private final CorsProperties corsProperties;
+    private final JudgeServiceTokenFilter judgeServiceTokenFilter;
 
     /**
      * 密码编码器
@@ -110,10 +112,13 @@ public class SecurityConfig {
                                 "/email/code"
                         ).permitAll()
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/internal/v1/judge-results")
+                        .hasRole("JUDGE_SERVICE")
                         .anyRequest().authenticated());
 
         // 添加JWT过滤器
         http.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+        http.addFilterBefore(judgeServiceTokenFilter, JwtAuthenticationFilter.class);
 
         return http.build();
     }

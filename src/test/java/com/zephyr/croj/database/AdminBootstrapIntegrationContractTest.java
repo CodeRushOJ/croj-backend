@@ -20,6 +20,7 @@ class AdminBootstrapIntegrationContractTest {
         assertTrue(script.contains("flyway_schema_history"));
         assertTrue(script.contains("administrator_id"));
         assertTrue(script.contains("BOOTSTRAP_ADMIN_PASSWORD"));
+        assertTrue(script.contains("mysql --protocol TCP --host 127.0.0.1"));
 
         String workflow = Files.readString(IMAGE_WORKFLOW);
         assertTrue(workflow.contains("tests/integration/admin-bootstrap-mysql84.sh"));

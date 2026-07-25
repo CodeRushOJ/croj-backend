@@ -6,6 +6,7 @@
 
 ### Added
 
+- 判题回传与提交状态模型原生支持 `OUTPUT_LIMIT_EXCEEDED`（code 8）；ACM 榜将 OLE 计为选手失败，显式终态集合仍排除 `SYSTEM_ERROR`。
 - Backend→Judging TestBundle v1/v2 CI 契约固定到最终已评审 Judge 提交，并由仓库测试防止本地脚本、GitHub Actions 与 README 的 consumer SHA 再次漂移。
 - 签名 SemVer tag 发布在推送双架构 GHCR 镜像后导出 repository、tag、revision、manifest digest 与 platforms JSON，供平台生成 digest-only 生产发布清单。
 - OI 实时榜、冻结榜和最终榜：逐题取历史最高分，使用比赛固定分值校验上限，并以总分、得分题数、最后提分时间和用户 ID 生成确定性排名。
@@ -47,6 +48,7 @@
 
 ### Security
 
+- Maven Enforcer 显式禁止无修复版本的 `commons-fileupload` 进入直接或传递依赖，候选依赖树保持零引用。
 - 生产依赖门禁移除无安全修复的 penggle/kaptcha，改用 `SecureRandom` 验证码生成器；RocketMQ 的 Netty、gRPC、Protobuf、BeanUtils 与 lz4 传递依赖升级到已修复版本，并由 Maven Enforcer 阻止回退。
 - Trivy 仍阻断全部应用级 HIGH/CRITICAL；仅对 Distroless Debian 13 当前无修复包的 7 个 OS finding 使用包级、带说明且 2026-08-31 到期的临时例外。
 - 全新部署不再依赖固定默认管理员密码；bootstrap guard 一经声明便拒绝所有其他身份，重跑不会提升冲突账号、复活已删除账号或静默重置凭据，命令输出经过凭据脱敏。

@@ -132,7 +132,8 @@ for _ in {1..90}; do
     if docker exec \
         --env "MYSQL_PWD=$mysql_root_password" \
         "$mysql_container" \
-        mysql --batch --skip-column-names --user root --execute 'SELECT 1' >/dev/null 2>&1; then
+        mysql --protocol TCP --host 127.0.0.1 \
+        --batch --skip-column-names --user root --execute 'SELECT 1' >/dev/null 2>&1; then
         mysql_ready=true
         break
     fi
@@ -143,7 +144,8 @@ done
 mysql_version="$(docker exec \
     --env "MYSQL_PWD=$mysql_root_password" \
     "$mysql_container" \
-    mysql --batch --skip-column-names --user root --execute 'SELECT VERSION()')"
+    mysql --protocol TCP --host 127.0.0.1 \
+    --batch --skip-column-names --user root --execute 'SELECT VERSION()')"
 [[ "$mysql_version" == 8.4.* ]] || fail "expected MySQL 8.4, got $mysql_version"
 
 docker exec \

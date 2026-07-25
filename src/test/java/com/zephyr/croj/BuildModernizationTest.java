@@ -29,6 +29,7 @@ class BuildModernizationTest {
         assertTrue(pom.contains("<grpc.version>1.75.0</grpc.version>"));
         assertTrue(pom.contains("<protobuf.version>3.25.5</protobuf.version>"));
         assertTrue(pom.contains("<commons-beanutils.version>1.11.0</commons-beanutils.version>"));
+        assertTrue(pom.contains("<exclude>commons-fileupload:commons-fileupload</exclude>"));
         assertTrue(pom.contains("<lz4-java.version>1.10.1</lz4-java.version>"));
         assertTrue(pom.contains("<groupId>at.yawk.lz4</groupId>"));
         assertTrue(pom.contains("<artifactId>rocketmq-logback-classic</artifactId>"));
@@ -56,6 +57,8 @@ class BuildModernizationTest {
         assertTrue(workflow.contains("packages: write"));
         assertTrue(workflow.contains("docker/login-action@"));
         assertTrue(workflow.contains("github.ref_type == 'tag'"));
+        assertTrue(workflow.contains(
+                "test \"$(git rev-parse \"$GITHUB_REF_NAME^{commit}\")\" = \"$GITHUB_SHA\""));
         assertTrue(workflow.contains("platforms: linux/amd64,linux/arm64"));
         assertTrue(workflow.contains("push: true"));
         assertTrue(workflow.contains("ghcr.io/coderushoj/croj-backend:${{ github.ref_name }}"));

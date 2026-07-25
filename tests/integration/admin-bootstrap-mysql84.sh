@@ -171,9 +171,9 @@ fi
 assert_log_contains "$temp_dir/first.log" "super-admin bootstrap created" "first run did not create the administrator"
 assert_log_redacted "$temp_dir/first.log"
 
-assert_equal "11" "$(mysql_query "$primary_database" \
+assert_equal "13" "$(mysql_query "$primary_database" \
     "SELECT COUNT(*) FROM flyway_schema_history WHERE success = 1 AND version IS NOT NULL")" \
-    "V1-V11 were not applied"
+    "V1-V13 were not applied"
 assert_equal "3" "$(mysql_query "$primary_database" \
     "SELECT COUNT(*) FROM t_forum_category WHERE slug IN ('announcements','algorithms','problems')")" \
     "production forum categories were not seeded"
@@ -258,9 +258,9 @@ else
     assert_log_contains "$temp_dir/concurrent-b.log" "conflicts with an existing account" \
         "the losing concurrent command did not report an identity conflict"
 fi
-assert_equal "11" "$(mysql_query "$concurrent_database" \
+assert_equal "13" "$(mysql_query "$concurrent_database" \
     "SELECT COUNT(*) FROM flyway_schema_history WHERE success = 1 AND version IS NOT NULL")" \
-    "concurrent startup did not apply V1-V11 exactly once"
+    "concurrent startup did not apply V1-V13 exactly once"
 assert_equal "1" "$(mysql_query "$concurrent_database" "SELECT COUNT(*) FROM t_user WHERE role = 2")" \
     "concurrent different identities created more than one super administrator"
 assert_equal "1" "$(mysql_query "$concurrent_database" \

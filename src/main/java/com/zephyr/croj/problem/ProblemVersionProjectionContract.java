@@ -2,19 +2,34 @@ package com.zephyr.croj.problem;
 
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zephyr.croj.model.entity.ProblemVersion;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Set;
+import java.nio.charset.StandardCharsets;
 
 public final class ProblemVersionProjectionContract {
+    private static final Set<String> LIMIT_FIELDS =
+            Set.of("timeLimit", "memoryLimit", "totalScore");
+    private static final Set<String> JUDGE_FIELDS =
+            Set.of(
+                    "specialJudge",
+                    "specialJudgeCode",
+                    "specialJudgeLanguage",
+                    "judgeMode",
+                    "checker",
+                    "difficulty");
     private final ObjectMapper objectMapper;
 
     public ProblemVersionProjectionContract(ObjectMapper objectMapper) {
         this.objectMapper =
-                objectMapper.copy().enable(JsonParser.Feature.STRICT_DUPLICATE_DETECTION);
+                objectMapper
+                        .copy()
+                        .enable(JsonParser.Feature.STRICT_DUPLICATE_DETECTION)
+                        .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
     }
 
     public void assertComplete(ProblemVersion version) {
@@ -33,19 +48,49 @@ public final class ProblemVersionProjectionContract {
             requireTags(statement);
 
             requireObject(limits);
+            requireFields(limits, LIMIT_FIELDS, "limits");
             requirePositiveInt(limits, "timeLimit");
             requirePositiveInt(limits, "memoryLimit");
-            requireNullableNonNegativeInt(limits, "totalScore");
+            Integer totalScore = requireNullableIntRange(
+                    limits,
+                    "totalScore",
+                    1,
+                    TestBundleManifestContract.MAX_TOTAL_SCORE);
 
             requireObject(judge);
+            requireFields(judge, JUDGE_FIELDS, "judge");
             requireBoolean(judge, "specialJudge");
             requireNullableText(judge, "specialJudgeCode");
             requireNullableText(judge, "specialJudgeLanguage");
             requireIntRange(judge, "judgeMode", 0, 1);
             requireIntRange(judge, "difficulty", 1, 3);
             String checker = requireText(judge, "checker", true);
-            if (!"exact".equals(checker) && !"token".equals(checker)) {
+            if (!"exact".equals(checker)
+                    && !"token".equals(checker)
+                    && !"special".equals(checker)) {
                 throw new ContractViolation("judge.checker");
+            }
+            boolean specialJudge = requireBooleanValue(judge, "specialJudge");
+            if (specialJudge != "special".equals(checker)) {
+                throw new ContractViolation("judge.specialJudge");
+            }
+            JsonNode specialJudgeCode = judge.get("specialJudgeCode");
+            JsonNode specialJudgeLanguage = judge.get("specialJudgeLanguage");
+            if (specialJudge) {
+                String source = requireText(judge, "specialJudgeCode", true);
+                String language = requireText(judge, "specialJudgeLanguage", true);
+                if (source.getBytes(StandardCharsets.UTF_8).length
+                                > TestBundleManifestContract.MAX_SPECIAL_JUDGE_SOURCE_BYTES
+                        || !Set.of("go", "cpp", "python", "java", "javascript")
+                                .contains(language)) {
+                    throw new ContractViolation("judge.specialJudge");
+                }
+            } else if (!specialJudgeCode.isNull() || !specialJudgeLanguage.isNull()) {
+                throw new ContractViolation("judge.specialJudge");
+            }
+            int judgeMode = requireIntRangeValue(judge, "judgeMode", 0, 1);
+            if (judgeMode == 1 && totalScore == null) {
+                throw new ContractViolation("limits.totalScore");
             }
         } catch (JsonProcessingException | IllegalArgumentException exception) {
             throw new ContractViolation("invalid JSON");
@@ -133,6 +178,12 @@ public final class ProblemVersionProjectionContract {
         return fields;
     }
 
+    private void requireFields(JsonNode object, Set<String> expected, String name) {
+        if (!fieldNames(object).equals(expected)) {
+            throw new ContractViolation(name);
+        }
+    }
+
     private void requirePositiveInt(JsonNode object, String field) {
         JsonNode value = object.get(field);
         if (value == null
@@ -143,15 +194,22 @@ public final class ProblemVersionProjectionContract {
         }
     }
 
-    private void requireNullableNonNegativeInt(JsonNode object, String field) {
+    private Integer requireNullableIntRange(
+            JsonNode object, String field, int minimum, int maximum) {
         JsonNode value = object.get(field);
-        if (value == null
-                || (!value.isNull()
-                        && (!value.isIntegralNumber()
-                                || !value.canConvertToInt()
-                                || value.intValue() < 0))) {
+        if (value == null) {
             throw new ContractViolation(field);
         }
+        if (value.isNull()) {
+            return null;
+        }
+        if (!value.isIntegralNumber()
+                || !value.canConvertToInt()
+                || value.intValue() < minimum
+                || value.intValue() > maximum) {
+            throw new ContractViolation(field);
+        }
+        return value.intValue();
     }
 
     private void requireBoolean(JsonNode object, String field) {
@@ -161,7 +219,17 @@ public final class ProblemVersionProjectionContract {
         }
     }
 
+    private boolean requireBooleanValue(JsonNode object, String field) {
+        requireBoolean(object, field);
+        return object.get(field).booleanValue();
+    }
+
     private void requireIntRange(JsonNode object, String field, int minimum, int maximum) {
+        requireIntRangeValue(object, field, minimum, maximum);
+    }
+
+    private int requireIntRangeValue(
+            JsonNode object, String field, int minimum, int maximum) {
         JsonNode value = object.get(field);
         if (value == null
                 || !value.isIntegralNumber()
@@ -170,6 +238,7 @@ public final class ProblemVersionProjectionContract {
                 || value.intValue() > maximum) {
             throw new ContractViolation(field);
         }
+        return value.intValue();
     }
 
     public static final class ContractViolation extends RuntimeException {

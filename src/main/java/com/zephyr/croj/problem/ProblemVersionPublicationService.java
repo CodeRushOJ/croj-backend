@@ -90,12 +90,12 @@ public class ProblemVersionPublicationService {
         version.setJudgeConfigJson(candidate.judgeConfigJson());
         version.setProjectionComplete(candidate.projectionComplete());
         try {
-            new TestBundleV1Contract(objectMapper)
+            new TestBundleManifestContract(objectMapper)
                     .validateAndCanonicalize(
                             version,
                             candidate.manifestJson(),
-                            TestBundleV1Contract.MAX_V1_CASES);
-        } catch (TestBundleV1Contract.ContractViolation exception) {
+                            TestBundleManifestContract.MAX_CASES);
+        } catch (TestBundleManifestContract.ContractViolation exception) {
             throw new BusinessException(ResultCodeEnum.PROBLEM_NOT_JUDGE_READY);
         }
     }

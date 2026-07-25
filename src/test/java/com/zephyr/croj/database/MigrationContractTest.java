@@ -32,6 +32,15 @@ class MigrationContractTest {
             "src", "main", "resources", "db", "migration", "V10__seed_forum_categories.sql");
     private static final Path PROBLEM_VERSION_PROJECTION = Path.of(
             "src", "main", "resources", "db", "migration", "V11__complete_problem_version_projection.sql");
+    private static final Path PROBLEM_CHECKER = Path.of(
+            "src", "main", "resources", "db", "migration", "V12__persist_problem_checker.sql");
+    private static final Path CONTEST_SCOREBOARD_LOOKUP = Path.of(
+            "src",
+            "main",
+            "resources",
+            "db",
+            "migration",
+            "V13__contest_scoreboard_lookup.sql");
 
     @Test
     void cleanSchemaCoversTheCompleteFreeOjDomain() throws IOException {
@@ -197,5 +206,27 @@ class MigrationContractTest {
         assertFalse(sql.contains("json_set"));
         assertFalse(sql.contains("p.`source`"));
         assertFalse(sql.contains("p.`difficulty`"));
+    }
+
+    @Test
+    void mutableProblemCheckerUsesAForwardOnlyConstrainedMigration() throws IOException {
+        assertTrue(Files.isRegularFile(PROBLEM_CHECKER));
+        String sql = Files.readString(PROBLEM_CHECKER).toLowerCase();
+        assertTrue(sql.contains("alter table `t_problem`"));
+        assertTrue(sql.contains("add column `checker` varchar(16)"));
+        assertTrue(sql.contains("default 'exact'"));
+        assertTrue(sql.contains("set `checker` = 'special'"));
+        assertTrue(sql.contains("chk_problem_checker"));
+        assertTrue(sql.contains("chk_problem_special_checker"));
+        assertTrue(sql.contains("'token'"));
+    }
+
+    @Test
+    void contestScoreboardLookupUsesAForwardOnlyCoveringPrefix() throws IOException {
+        assertTrue(Files.isRegularFile(CONTEST_SCOREBOARD_LOOKUP));
+        String sql = Files.readString(CONTEST_SCOREBOARD_LOOKUP).toLowerCase();
+        assertTrue(sql.contains("alter table `t_submission`"));
+        assertTrue(sql.contains("idx_submission_contest_time"));
+        assertTrue(sql.contains("(`contest_id`, `is_deleted`, `create_time`, `id`)"));
     }
 }

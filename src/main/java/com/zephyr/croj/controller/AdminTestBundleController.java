@@ -33,7 +33,7 @@ import org.springframework.web.multipart.MultipartFile;
 @RequiredArgsConstructor
 @ConditionalOnProperty(prefix = "app.test-bundle", name = "enabled", havingValue = "true")
 @PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN')")
-@Tag(name = "Admin TestBundle", description = "Upload and publish private TestBundle v1 archives")
+@Tag(name = "Admin TestBundle", description = "Upload and publish private TestBundle v1/v2 archives")
 @SecurityRequirement(name = "Bearer Authentication")
 public class AdminTestBundleController {
     private final AdminTestBundleService testBundles;
@@ -49,7 +49,7 @@ public class AdminTestBundleController {
 
     @PutMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @Operation(
-            summary = "Validate and attach a TestBundle v1 ZIP to a draft problem version",
+            summary = "Validate and attach a TestBundle v1/v2 ZIP to a draft problem version",
             requestBody = @RequestBody(required = true, content = @Content(
                     mediaType = MediaType.MULTIPART_FORM_DATA_VALUE,
                     schema = @Schema(type = "object"))))

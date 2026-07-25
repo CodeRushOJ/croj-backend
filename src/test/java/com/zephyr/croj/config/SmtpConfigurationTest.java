@@ -35,6 +35,10 @@ class SmtpConfigurationTest {
                     assertThat(sender.getUsername()).isEqualTo("noreply@coderushoj.local");
                     assertThat(sender.getPassword()).isEmpty();
                     assertTransportProperties(sender.getJavaMailProperties(), false, false, false);
+                    assertThat(sender.getJavaMailProperties())
+                            .containsEntry("mail.smtp.connectiontimeout", "3000")
+                            .containsEntry("mail.smtp.timeout", "5000")
+                            .containsEntry("mail.smtp.writetimeout", "5000");
                 });
     }
 

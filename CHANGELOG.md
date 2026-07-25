@@ -6,6 +6,7 @@
 
 ### Added
 
+- SMTP 增加可配置的连接、读取与写入超时，并将传输层 `MailException` 转换为有界失败，邮件基础设施异常不再把 HTTP 请求拖到网关 504。
 - 判题回传与提交状态模型原生支持 `OUTPUT_LIMIT_EXCEEDED`（code 8）；ACM 榜将 OLE 计为选手失败，显式终态集合仍排除 `SYSTEM_ERROR`。
 - Backend→Judging TestBundle v1/v2 CI 契约固定到最终已评审 Judge 提交，并由仓库测试防止本地脚本、GitHub Actions 与 README 的 consumer SHA 再次漂移。
 - Annotated SemVer tag 发布在推送双架构 GHCR 镜像后，通过 GitHub OIDC 为 manifest digest 生成 keyless provenance，并导出 repository、tag、revision、digest 与 platforms JSON，供平台生成 digest-only 生产发布清单。

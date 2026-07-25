@@ -4,6 +4,7 @@ import com.zephyr.croj.service.EmailService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.mail.MailException;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
@@ -85,7 +86,7 @@ public class EmailServiceImpl implements EmailService {
             mailSender.send(message);
             log.info("邮件发送成功: {}", to);
             return true;
-        } catch (MessagingException e) {
+        } catch (MessagingException | MailException e) {
             log.error("邮件发送失败: {}", e.getMessage());
             return false;
         }

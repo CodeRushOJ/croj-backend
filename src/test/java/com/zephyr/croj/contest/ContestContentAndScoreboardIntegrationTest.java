@@ -116,6 +116,24 @@ class ContestContentAndScoreboardIntegrationTest {
     }
 
     @Test
+    void acmRepositoryIncludesOlePenaltyButExcludesSystemError() {
+        jdbc.update(
+                "INSERT INTO t_submission VALUES (11,42,101,1,7,'java','x',8,NULL,'2026-07-10 10:15:00','2026-07-10 10:15:01',0)");
+        jdbc.update(
+                "INSERT INTO t_submission VALUES (12,42,101,1,7,'java','x',7,NULL,'2026-07-10 10:20:00','2026-07-10 10:20:01',0)");
+        ContestScoreboardService scoreboards = new ContestScoreboardService(
+                new ContestRepository(jdbc), fixed("2026-07-10T10:40:00Z"));
+
+        var alice = scoreboards.publicScoreboard(1L, 7L).rows().stream()
+                .filter(row -> row.userId() == 7L)
+                .findFirst()
+                .orElseThrow();
+
+        assertEquals(2, alice.problems().get(0).wrongAttempts());
+        assertEquals(70, alice.penaltyMinutes());
+    }
+
+    @Test
     void oiBoardUsesBestPinnedScoresAndKeepsPostFreezeResultsPrivate() {
         ContestRepository repository = new ContestRepository(jdbc);
         Clock frozenClock = fixed("2026-07-10T11:30:00Z");

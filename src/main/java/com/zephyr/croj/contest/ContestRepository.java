@@ -426,7 +426,7 @@ public class ContestRepository {
                 """
                 SELECT id,user_id,problem_id,status,create_time FROM t_submission
                 WHERE contest_id=? AND create_time<? AND is_deleted=0
-                  AND status BETWEEN 1 AND 6
+                  AND status IN (1,2,3,4,5,6,8)
                 ORDER BY create_time,id
                 """,
                 (result, row) -> new AcmScoreboardCalculator.SubmissionFact(
@@ -445,7 +445,7 @@ public class ContestRepository {
                 """
                 SELECT id,user_id,problem_id,score,create_time FROM t_submission
                 WHERE contest_id=? AND create_time<? AND is_deleted=0
-                  AND status BETWEEN 1 AND 6
+                  AND status IN (1,2,3,4,5,6,8)
                 ORDER BY create_time,id
                 """,
                 (result, row) -> new OiScoreboardCalculator.SubmissionFact(

@@ -56,6 +56,7 @@ class BuildModernizationTest {
 
         assertTrue(workflow.contains("packages: write"));
         assertTrue(workflow.contains("id-token: write"));
+        assertTrue(workflow.contains("attestations: write"));
         assertTrue(workflow.contains("docker/login-action@"));
         assertTrue(workflow.contains("github.ref_type == 'tag'"));
         assertTrue(workflow.contains(

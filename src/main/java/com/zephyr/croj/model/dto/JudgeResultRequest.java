@@ -1,5 +1,7 @@
 package com.zephyr.croj.model.dto;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -24,10 +26,21 @@ public class JudgeResultRequest {
     private Integer timeUsedMillis;
     @NotNull @Min(0) @Max(2_147_483_647L)
     private Integer memoryUsedKb;
+    @Min(0) @Max(1_000_000_000)
+    private Integer score;
+    @Min(1) @Max(1_000_000_000)
+    private Integer totalScore;
     @Size(max = 65_536)
     private String stdout;
     @Size(max = 65_536)
     private String stderr;
     @Size(max = 32_768)
     private String compileError;
+
+    @JsonIgnore
+    @AssertTrue(message = "score and totalScore must be present together")
+    public boolean isScoreContractComplete() {
+        return (score == null) == (totalScore == null)
+                && (score == null || score <= totalScore);
+    }
 }

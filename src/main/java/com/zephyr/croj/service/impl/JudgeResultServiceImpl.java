@@ -8,9 +8,11 @@ import com.zephyr.croj.common.exception.JudgeResultConflictException;
 import com.zephyr.croj.mapper.JudgeAttemptMapper;
 import com.zephyr.croj.mapper.JudgeResultReceiptMapper;
 import com.zephyr.croj.mapper.ProblemMapper;
+import com.zephyr.croj.mapper.ProblemVersionMapper;
 import com.zephyr.croj.mapper.SubmissionMapper;
 import com.zephyr.croj.model.dto.JudgeResultRequest;
 import com.zephyr.croj.model.entity.JudgeResultReceipt;
+import com.zephyr.croj.model.entity.ProblemVersion;
 import com.zephyr.croj.model.entity.Submission;
 import com.zephyr.croj.model.vo.JudgeResultResponse;
 import com.zephyr.croj.service.JudgeResultService;
@@ -33,6 +35,7 @@ public class JudgeResultServiceImpl implements JudgeResultService {
     private final JudgeAttemptMapper attempts;
     private final JudgeResultReceiptMapper receipts;
     private final ProblemMapper problems;
+    private final ProblemVersionMapper versions;
     private final ObjectMapper objectMapper;
 
     @Override
@@ -63,6 +66,7 @@ public class JudgeResultServiceImpl implements JudgeResultService {
         if (submission == null || !SubmissionStatusEnum.PENDING.getCode().equals(submission.getStatus())) {
             throw new JudgeResultConflictException("submission is missing or already terminal");
         }
+        validateScoreContract(request, status, submission);
         if (attempts.completeAttempt(
                 request.getSubmissionId(), request.getAttemptNo(), status.name(), resultJson) != 1) {
             throw new JudgeResultConflictException("judge attempt is missing, stale, or already terminal");
@@ -72,6 +76,7 @@ public class JudgeResultServiceImpl implements JudgeResultService {
                 status.submissionCode(),
                 request.getTimeUsedMillis(),
                 request.getMemoryUsedKb(),
+                request.getScore(),
                 resultJson,
                 errorMessage(request, status)) != 1) {
             throw new JudgeResultConflictException("submission terminal state won the update race");
@@ -92,7 +97,66 @@ public class JudgeResultServiceImpl implements JudgeResultService {
                 && (request.getCompileError() == null || request.getCompileError().isBlank())) {
             throw new JudgeResultConflictException("COMPILE_ERROR requires compileError");
         }
+        if ((request.getScore() == null) != (request.getTotalScore() == null)) {
+            throw new JudgeResultConflictException("score and totalScore must be present together");
+        }
+        if (request.getScore() != null
+                && (request.getScore() < 0
+                        || request.getTotalScore() <= 0
+                        || request.getScore() > request.getTotalScore()
+                        || request.getTotalScore() > 1_000_000_000)) {
+            throw new JudgeResultConflictException("score is outside the judge result contract");
+        }
         return status;
+    }
+
+    private void validateScoreContract(
+            JudgeResultRequest request, JudgeResultStatus status, Submission submission) {
+        if (submission.getProblemVersionId() == null) {
+            throw new JudgeResultConflictException("submission has no immutable problem version");
+        }
+        ProblemVersion version = versions.selectById(submission.getProblemVersionId());
+        if (version == null
+                || !submission.getProblemId().equals(version.getProblemId())
+                || !"PUBLISHED".equals(version.getState())) {
+            throw new JudgeResultConflictException("immutable problem version is unavailable");
+        }
+        try {
+            var limits = objectMapper.readTree(version.getLimitsJson());
+            var judge = objectMapper.readTree(version.getJudgeConfigJson());
+            if (limits == null
+                    || !limits.isObject()
+                    || judge == null
+                    || !judge.isObject()
+                    || !judge.path("judgeMode").isIntegralNumber()) {
+                throw new JudgeResultConflictException("immutable judge score config is invalid");
+            }
+            int judgeMode = judge.path("judgeMode").intValue();
+            if (judgeMode == 0) {
+                if (request.getScore() != null) {
+                    throw new JudgeResultConflictException("ACM result must not contain a score");
+                }
+                return;
+            }
+            if (judgeMode != 1
+                    || !limits.path("totalScore").isIntegralNumber()
+                    || limits.path("totalScore").intValue() <= 0) {
+                throw new JudgeResultConflictException("immutable judge score config is invalid");
+            }
+            int immutableTotal = limits.path("totalScore").intValue();
+            if (request.getScore() == null
+                    || !Integer.valueOf(immutableTotal).equals(request.getTotalScore())) {
+                throw new JudgeResultConflictException(
+                        "OI result totalScore disagrees with the immutable problem version");
+            }
+            boolean fullScore = request.getScore().equals(request.getTotalScore());
+            if ((status == JudgeResultStatus.ACCEPTED) != fullScore) {
+                throw new JudgeResultConflictException(
+                        "OI ACCEPTED status must exactly match a full score");
+            }
+        } catch (JsonProcessingException | IllegalArgumentException exception) {
+            throw new JudgeResultConflictException("immutable judge score config is invalid");
+        }
     }
 
     private String canonicalPayload(JudgeResultRequest request, JudgeResultStatus status) {
@@ -104,6 +168,10 @@ public class JudgeResultServiceImpl implements JudgeResultService {
         payload.put("exitCode", request.getExitCode());
         payload.put("timeUsedMillis", request.getTimeUsedMillis());
         payload.put("memoryUsedKb", request.getMemoryUsedKb());
+        if (request.getScore() != null) {
+            payload.put("score", request.getScore());
+            payload.put("totalScore", request.getTotalScore());
+        }
         payload.put("stdout", nullToEmpty(request.getStdout()));
         payload.put("stderr", nullToEmpty(request.getStderr()));
         payload.put("compileError", nullToEmpty(request.getCompileError()));

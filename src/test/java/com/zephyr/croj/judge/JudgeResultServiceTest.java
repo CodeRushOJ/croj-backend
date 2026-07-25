@@ -6,16 +6,21 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verify;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zephyr.croj.common.exception.JudgeResultConflictException;
 import com.zephyr.croj.mapper.JudgeAttemptMapper;
 import com.zephyr.croj.mapper.JudgeResultReceiptMapper;
 import com.zephyr.croj.mapper.ProblemMapper;
+import com.zephyr.croj.mapper.ProblemVersionMapper;
 import com.zephyr.croj.mapper.SubmissionMapper;
 import com.zephyr.croj.model.dto.JudgeResultRequest;
 import com.zephyr.croj.model.entity.JudgeResultReceipt;
+import com.zephyr.croj.model.entity.ProblemVersion;
 import com.zephyr.croj.model.entity.Submission;
 import com.zephyr.croj.service.impl.JudgeResultServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
@@ -31,11 +36,13 @@ class JudgeResultServiceTest {
     @Mock private JudgeAttemptMapper attempts;
     @Mock private JudgeResultReceiptMapper receipts;
     @Mock private ProblemMapper problems;
+    @Mock private ProblemVersionMapper versions;
     private JudgeResultServiceImpl service;
 
     @BeforeEach
     void setUp() {
-        service = new JudgeResultServiceImpl(submissions, attempts, receipts, problems, new ObjectMapper());
+        service = new JudgeResultServiceImpl(
+                submissions, attempts, receipts, problems, versions, new ObjectMapper());
     }
 
     @Test
@@ -43,8 +50,16 @@ class JudgeResultServiceTest {
         JudgeResultRequest request = accepted("event-1");
         when(receipts.insertIgnore(any())).thenReturn(1);
         when(submissions.selectById(99L)).thenReturn(pendingSubmission());
+        when(versions.selectById(101L)).thenReturn(acmVersion());
         when(attempts.completeAttempt(anyLong(), anyInt(), anyString(), anyString())).thenReturn(1);
-        when(submissions.completePending(anyLong(), anyInt(), anyInt(), anyInt(), anyString(), anyString()))
+        when(submissions.completePending(
+                        anyLong(),
+                        anyInt(),
+                        anyInt(),
+                        anyInt(),
+                        nullable(Integer.class),
+                        anyString(),
+                        anyString()))
                 .thenReturn(1);
         when(problems.incrementAcceptedCount(42L)).thenReturn(1);
 
@@ -56,8 +71,16 @@ class JudgeResultServiceTest {
         JudgeResultRequest request = accepted("event-1");
         when(receipts.insertIgnore(any())).thenReturn(1);
         when(submissions.selectById(99L)).thenReturn(pendingSubmission());
+        when(versions.selectById(101L)).thenReturn(acmVersion());
         when(attempts.completeAttempt(anyLong(), anyInt(), anyString(), anyString())).thenReturn(1);
-        when(submissions.completePending(anyLong(), anyInt(), anyInt(), anyInt(), anyString(), anyString()))
+        when(submissions.completePending(
+                        anyLong(),
+                        anyInt(),
+                        anyInt(),
+                        anyInt(),
+                        nullable(Integer.class),
+                        anyString(),
+                        anyString()))
                 .thenReturn(1);
         when(problems.incrementAcceptedCount(42L)).thenReturn(1);
         assertEquals("APPLIED", service.ingest(request).disposition());
@@ -73,9 +96,54 @@ class JudgeResultServiceTest {
     void staleAttemptCannotOverwriteSubmissionState() {
         when(receipts.insertIgnore(any())).thenReturn(1);
         when(submissions.selectById(99L)).thenReturn(pendingSubmission());
+        when(versions.selectById(101L)).thenReturn(acmVersion());
         when(attempts.completeAttempt(anyLong(), anyInt(), anyString(), anyString())).thenReturn(0);
 
         assertThrows(JudgeResultConflictException.class, () -> service.ingest(accepted("event-stale")));
+    }
+
+    @Test
+    void persistsAValidatedPartialOIScore() {
+        JudgeResultRequest request = accepted("event-oi");
+        request.setStatus("WRONG_ANSWER");
+        request.setScore(70);
+        request.setTotalScore(100);
+        when(receipts.insertIgnore(any())).thenReturn(1);
+        when(submissions.selectById(99L)).thenReturn(pendingSubmission());
+        when(versions.selectById(101L)).thenReturn(oiVersion());
+        when(attempts.completeAttempt(anyLong(), anyInt(), anyString(), anyString())).thenReturn(1);
+        when(submissions.completePending(
+                        anyLong(),
+                        anyInt(),
+                        anyInt(),
+                        anyInt(),
+                        nullable(Integer.class),
+                        anyString(),
+                        anyString()))
+                .thenReturn(1);
+
+        assertEquals("APPLIED", service.ingest(request).disposition());
+        verify(submissions)
+                .completePending(
+                        eq(99L),
+                        eq(3),
+                        eq(12),
+                        eq(2048),
+                        eq(70),
+                        org.mockito.ArgumentMatchers.contains("\"score\":70"),
+                        eq(""));
+    }
+
+    @Test
+    void rejectsScoresThatDisagreeWithTheImmutableJudgeMode() {
+        JudgeResultRequest request = accepted("event-invalid-score");
+        request.setScore(70);
+        request.setTotalScore(100);
+        when(receipts.insertIgnore(any())).thenReturn(1);
+        when(submissions.selectById(99L)).thenReturn(pendingSubmission());
+        when(versions.selectById(101L)).thenReturn(acmVersion());
+
+        assertThrows(JudgeResultConflictException.class, () -> service.ingest(request));
     }
 
     private JudgeResultRequest accepted(String resultId) {
@@ -97,7 +165,30 @@ class JudgeResultServiceTest {
         Submission submission = new Submission();
         submission.setId(99L);
         submission.setProblemId(42L);
+        submission.setProblemVersionId(101L);
         submission.setStatus(0);
         return submission;
+    }
+
+    private ProblemVersion acmVersion() {
+        return version(0);
+    }
+
+    private ProblemVersion oiVersion() {
+        return version(1);
+    }
+
+    private ProblemVersion version(int judgeMode) {
+        ProblemVersion version = new ProblemVersion();
+        version.setId(101L);
+        version.setProblemId(42L);
+        version.setState("PUBLISHED");
+        version.setLimitsJson("{\"timeLimit\":1000,\"memoryLimit\":64,\"totalScore\":100}");
+        version.setJudgeConfigJson(
+                "{\"specialJudge\":false,\"specialJudgeCode\":null,"
+                        + "\"specialJudgeLanguage\":null,\"judgeMode\":"
+                        + judgeMode
+                        + "}");
+        return version;
     }
 }

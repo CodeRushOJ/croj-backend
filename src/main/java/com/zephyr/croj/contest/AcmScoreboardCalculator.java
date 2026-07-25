@@ -1,5 +1,6 @@
 package com.zephyr.croj.contest;
 
+import com.zephyr.croj.common.enums.SubmissionStatusEnum;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -8,8 +9,17 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 public final class AcmScoreboardCalculator {
+    private static final Set<Integer> CONTESTANT_FAILURES = Set.of(
+            SubmissionStatusEnum.COMPILE_ERROR.getCode(),
+            SubmissionStatusEnum.WRONG_ANSWER.getCode(),
+            SubmissionStatusEnum.TIME_LIMIT_EXCEEDED.getCode(),
+            SubmissionStatusEnum.MEMORY_LIMIT_EXCEEDED.getCode(),
+            SubmissionStatusEnum.RUNTIME_ERROR.getCode(),
+            SubmissionStatusEnum.OUTPUT_LIMIT_EXCEEDED.getCode());
+
     private AcmScoreboardCalculator() {}
 
     public record Problem(long problemId, String label) {}
@@ -93,7 +103,7 @@ public final class AcmScoreboardCalculator {
                         accepted = fact;
                         break;
                     }
-                    if (fact.status() >= 2 && fact.status() <= 6) {
+                    if (CONTESTANT_FAILURES.contains(fact.status())) {
                         wrongAttempts++;
                     }
                 }

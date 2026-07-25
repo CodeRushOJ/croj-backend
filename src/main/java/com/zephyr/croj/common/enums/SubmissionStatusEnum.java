@@ -48,7 +48,12 @@ public enum SubmissionStatusEnum {
     /**
      * 系统错误
      */
-    SYSTEM_ERROR(7, "系统错误");
+    SYSTEM_ERROR(7, "系统错误"),
+
+    /**
+     * 输出超限
+     */
+    OUTPUT_LIMIT_EXCEEDED(8, "输出超限");
 
     /**
      * 状态码

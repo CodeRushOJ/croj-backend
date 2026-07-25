@@ -34,6 +34,28 @@ class AcmScoreboardCalculatorTest {
     }
 
     @Test
+    void countsEveryContestantTerminalFailureIncludingOleButExcludesSystemError() {
+        AcmScoreboardCalculator.Scoreboard board = AcmScoreboardCalculator.calculate(
+                List.of(7L),
+                List.of(new AcmScoreboardCalculator.Problem(42L, "A")),
+                List.of(
+                        fact(1, 7, 42, 2, 1),
+                        fact(2, 7, 42, 3, 2),
+                        fact(3, 7, 42, 4, 3),
+                        fact(4, 7, 42, 5, 4),
+                        fact(5, 7, 42, 6, 5),
+                        fact(6, 7, 42, 7, 6),
+                        fact(7, 7, 42, 8, 7),
+                        fact(8, 7, 42, 1, 20)),
+                START,
+                END);
+
+        AcmScoreboardCalculator.Row row = board.rows().get(0);
+        assertEquals(6, row.problems().get(0).wrongAttempts());
+        assertEquals(140, row.penaltyMinutes());
+    }
+
+    @Test
     void marksOneDeterministicFirstAcceptedAndRanksByAcmRules() {
         AcmScoreboardCalculator.Scoreboard board = AcmScoreboardCalculator.calculate(
                 List.of(7L, 8L, 9L),

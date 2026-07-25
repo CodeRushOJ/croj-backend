@@ -167,6 +167,38 @@ class JudgeResultServiceTest {
     }
 
     @Test
+    void persistsOutputLimitExceededAsTheNativeTerminalStatus() {
+        JudgeResultRequest request = accepted("event-ole");
+        request.setStatus("OUTPUT_LIMIT_EXCEEDED");
+        request.setExitCode(-1);
+        request.setStderr("captured output exceeded the configured limit");
+        when(receipts.insertIgnore(any())).thenReturn(1);
+        when(submissions.selectById(99L)).thenReturn(pendingSubmission());
+        when(versions.selectById(101L)).thenReturn(acmVersion());
+        when(attempts.completeAttempt(anyLong(), anyInt(), anyString(), anyString())).thenReturn(1);
+        when(submissions.completePending(
+                        anyLong(),
+                        anyInt(),
+                        anyInt(),
+                        anyInt(),
+                        nullable(Integer.class),
+                        anyString(),
+                        anyString()))
+                .thenReturn(1);
+
+        assertEquals("APPLIED", service.ingest(request).disposition());
+        verify(submissions)
+                .completePending(
+                        eq(99L),
+                        eq(8),
+                        eq(12),
+                        eq(2048),
+                        org.mockito.ArgumentMatchers.isNull(),
+                        org.mockito.ArgumentMatchers.contains("\"status\":\"OUTPUT_LIMIT_EXCEEDED\""),
+                        eq("captured output exceeded the configured limit"));
+    }
+
+    @Test
     void rejectsScoresThatDisagreeWithTheImmutableJudgeMode() {
         JudgeResultRequest request = accepted("event-invalid-score");
         request.setScore(70);

@@ -10,7 +10,8 @@ public enum JudgeResultStatus {
     TIME_LIMIT_EXCEEDED(SubmissionStatusEnum.TIME_LIMIT_EXCEEDED.getCode()),
     MEMORY_LIMIT_EXCEEDED(SubmissionStatusEnum.MEMORY_LIMIT_EXCEEDED.getCode()),
     RUNTIME_ERROR(SubmissionStatusEnum.RUNTIME_ERROR.getCode()),
-    SYSTEM_ERROR(SubmissionStatusEnum.SYSTEM_ERROR.getCode());
+    SYSTEM_ERROR(SubmissionStatusEnum.SYSTEM_ERROR.getCode()),
+    OUTPUT_LIMIT_EXCEEDED(SubmissionStatusEnum.OUTPUT_LIMIT_EXCEEDED.getCode());
 
     private final int submissionCode;
 

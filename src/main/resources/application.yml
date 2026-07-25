@@ -39,9 +39,9 @@ spring:
       mail:
         smtp:
           auth: ${SMTP_AUTH:false}
-          connectiontimeout: ${SMTP_CONNECTION_TIMEOUT_MS:3000}
-          timeout: ${SMTP_READ_TIMEOUT_MS:5000}
-          writetimeout: ${SMTP_WRITE_TIMEOUT_MS:5000}
+          connectiontimeout: ${app.smtp.connection-timeout-millis}
+          timeout: ${app.smtp.read-timeout-millis}
+          writetimeout: ${app.smtp.write-timeout-millis}
           starttls:
             enable: ${SMTP_STARTTLS:false}
             required: ${SMTP_STARTTLS:false}
@@ -101,6 +101,10 @@ springdoc:
 
 # File storage configuration
 app:
+  smtp:
+    connection-timeout-millis: ${SMTP_CONNECTION_TIMEOUT_MS:3000}
+    read-timeout-millis: ${SMTP_READ_TIMEOUT_MS:5000}
+    write-timeout-millis: ${SMTP_WRITE_TIMEOUT_MS:5000}
   test-bundle:
     enabled: ${TEST_BUNDLE_STORAGE_ENABLED:false}
     bucket: ${TEST_BUNDLE_S3_BUCKET:coderushoj-test-bundles}

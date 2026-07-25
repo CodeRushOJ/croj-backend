@@ -6,15 +6,18 @@ import java.util.Properties;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.autoconfigure.mail.MailSenderAutoConfiguration;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.test.context.ConfigDataApplicationContextInitializer;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.mail.javamail.JavaMailSenderImpl;
 
 class SmtpConfigurationTest {
 
     private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
             .withInitializer(new ConfigDataApplicationContextInitializer())
-            .withConfiguration(AutoConfigurations.of(MailSenderAutoConfiguration.class));
+            .withConfiguration(AutoConfigurations.of(MailSenderAutoConfiguration.class))
+            .withUserConfiguration(SmtpTimeoutTestConfiguration.class);
 
     @Test
     void mailpitUsesPlainSmtpWithoutAuthenticationOrTls() {
@@ -83,6 +86,37 @@ class SmtpConfigurationTest {
                 });
     }
 
+    @Test
+    void customTimeoutsAreValidatedAndForwardedToJavaMail() {
+        contextRunner
+                .withSystemProperties(
+                        "SMTP_CONNECTION_TIMEOUT_MS=1234",
+                        "SMTP_READ_TIMEOUT_MS=2345",
+                        "SMTP_WRITE_TIMEOUT_MS=3456")
+                .run(context -> {
+                    assertThat(context).hasNotFailed();
+                    JavaMailSenderImpl sender = context.getBean(JavaMailSenderImpl.class);
+                    assertThat(sender.getJavaMailProperties())
+                            .containsEntry("mail.smtp.connectiontimeout", "1234")
+                            .containsEntry("mail.smtp.timeout", "2345")
+                            .containsEntry("mail.smtp.writetimeout", "3456");
+                });
+    }
+
+    @Test
+    void zeroTimeoutFailsFast() {
+        contextRunner
+                .withSystemProperties("SMTP_CONNECTION_TIMEOUT_MS=0")
+                .run(context -> assertThat(context).hasFailed());
+    }
+
+    @Test
+    void nonNumericTimeoutFailsFast() {
+        contextRunner
+                .withSystemProperties("SMTP_READ_TIMEOUT_MS=forever")
+                .run(context -> assertThat(context).hasFailed());
+    }
+
     private static void assertTransportProperties(
             Properties properties, boolean auth, boolean startTls, boolean ssl) {
         assertThat(properties)
@@ -92,4 +126,8 @@ class SmtpConfigurationTest {
                 .containsEntry("mail.smtp.ssl.enable", Boolean.toString(ssl))
                 .doesNotContainKeys("mail.smtp.socketFactory.port", "mail.smtp.socketFactory.class");
     }
+
+    @Configuration(proxyBeanMethods = false)
+    @EnableConfigurationProperties(SmtpTimeoutProperties.class)
+    static class SmtpTimeoutTestConfiguration {}
 }

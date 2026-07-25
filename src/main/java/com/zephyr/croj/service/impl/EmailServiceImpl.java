@@ -87,7 +87,7 @@ public class EmailServiceImpl implements EmailService {
             log.info("邮件发送成功: {}", to);
             return true;
         } catch (MessagingException | MailException e) {
-            log.error("邮件发送失败: {}", e.getMessage());
+            log.error("邮件发送失败: {}", e.getMessage(), e);
             return false;
         }
     }

@@ -56,7 +56,7 @@ SMTP_STARTTLS=false
 SMTP_SSL=true
 ```
 
-生产 TLS 模式下 `SMTP_STARTTLS` 与 `SMTP_SSL` 二选一，不能同时开启；Mailpit 明文模式应同时关闭。在 Docker Compose 或 Kubernetes 中运行后端时，把 `SMTP_HOST` 改为 Mailpit 的 Service 名称。未启用认证时 `SMTP_PASSWORD` 可以留空，`SMTP_USERNAME` 仍建议使用合法发件地址。连接、读取和写入超时分别由 `SMTP_CONNECTION_TIMEOUT_MS`、`SMTP_READ_TIMEOUT_MS`、`SMTP_WRITE_TIMEOUT_MS` 控制，默认 `3000/5000/5000ms`；不要通过无限增大网关超时掩盖 SMTP 故障。
+生产 TLS 模式下 `SMTP_STARTTLS` 与 `SMTP_SSL` 二选一，不能同时开启；Mailpit 明文模式应同时关闭。在 Docker Compose 或 Kubernetes 中运行后端时，把 `SMTP_HOST` 改为 Mailpit 的 Service 名称。未启用认证时 `SMTP_PASSWORD` 可以留空，`SMTP_USERNAME` 仍建议使用合法发件地址。连接、读取和写入超时分别由 `SMTP_CONNECTION_TIMEOUT_MS`、`SMTP_READ_TIMEOUT_MS`、`SMTP_WRITE_TIMEOUT_MS` 控制，默认 `3000/5000/5000ms`，每项必须是 `100–60000ms` 的整数；非法值会让应用启动失败，避免静默退化为无界等待。不要通过无限增大网关超时掩盖 SMTP 故障。
 
 ## 首个超级管理员
 

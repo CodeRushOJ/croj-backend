@@ -223,6 +223,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Publish immutable multi-architecture image
+        id: push
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
@@ -239,3 +240,27 @@ jobs:
           cache-to: type=gha,mode=max
           provenance: mode=max
           sbom: true
+
+      - name: Record immutable image manifest
+        env:
+          IMAGE_REPOSITORY: ghcr.io/coderushoj/croj-backend
+          IMAGE_TAG: ${{ github.ref_name }}
+          IMAGE_REVISION: ${{ github.sha }}
+          IMAGE_DIGEST: ${{ steps.push.outputs.digest }}
+        run: |
+          test "${IMAGE_DIGEST#sha256:}" != "$IMAGE_DIGEST"
+          jq -n \
+            --arg repository "$IMAGE_REPOSITORY" \
+            --arg tag "$IMAGE_TAG" \
+            --arg revision "$IMAGE_REVISION" \
+            --arg digest "$IMAGE_DIGEST" \
+            --argjson platforms '["linux/amd64","linux/arm64"]' \
+            '{repository:$repository,tag:$tag,revision:$revision,digest:$digest,platforms:$platforms}' \
+            > backend-image.json
+
+      - name: Upload immutable image manifest
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: backend-image-${{ github.sha }}
+          path: backend-image.json
+          if-no-files-found: error

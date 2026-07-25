@@ -2,7 +2,7 @@
 
 set -Eeuo pipefail
 
-readonly JUDGING_CONTRACT_COMMIT="c56bc7b"
+readonly JUDGING_CONTRACT_COMMIT="b2f270286c17dddb27557fa80a32bb1dbde67c7d"
 repository_root="$(pwd -P)"
 readonly repository_root
 

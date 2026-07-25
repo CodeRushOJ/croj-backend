@@ -89,7 +89,7 @@ Outbox 参数可通过 `.env.example` 中的 `OUTBOX_*` 变量覆盖。`OUTBOX_C
 
 导入或管理流程先把规范化隐藏测试绑定为 `TestBundle`，后端以 SHA-256 生成 `test-bundles/{problemId}/{versionId}/{sha256}.zip` 对象键并写入私有 S3/MinIO 桶。TestBundle v1 永久兼容 ACM exact/token；v2 支持 ACM/OI、exact/token/special、正权重总分和隔离 SPJ。版本与 manifest 的模式、checker、时间/内存、OI totalScore 以及 SPJ source/language/SHA-256 必须一致；attach 在接触对象存储前校验，publish 会对数据库中已经保存的 manifest 再次校验，手工写库不能绕过。发布事务随后原子设置 `PUBLISHED`、切换 `published_version_id` 并把可见标签关系替换为版本快照。管理员先通过 `/api/v1/admin/problems/{problemId}/versions` 发现真实版本 ID 和状态，再使用带强 `If-Match` 的 `/api/v1/admin/problems/{problemId}/versions/{versionId}/test-bundle` 接口查看、上传并发布单个草稿版本；并发覆盖会被拒绝。配置、HTTP 契约、manifest 约束和故障模型见 [`docs/api/test-bundles.md`](docs/api/test-bundles.md)。
 
-Backend 与固定 Judging consumer 的真实 ZIP 契约可通过 `scripts/verify-test-bundle-contract.sh` 验证。默认从相邻 `croj-judging-server` checkout 读取 `c56bc7b`；非相邻目录可设置 `JUDGING_REPOSITORY=/absolute/path/to/croj-judging-server`。门禁会分别生成 v1 与 OI/SPJ v2 artifact，再由 Judging 的 archive loader 实际解析并读取。
+Backend 与固定 Judging consumer 的真实 ZIP 契约可通过 `scripts/verify-test-bundle-contract.sh` 验证。默认从相邻 `croj-judging-server` checkout 读取已评审的最终候选 `b2f2702`；非相邻目录可设置 `JUDGING_REPOSITORY=/absolute/path/to/croj-judging-server`。门禁会分别生成 v1 与 OI/SPJ v2 artifact，再由 Judging 的 archive loader 实际解析并读取。
 
 ### 题目包导入
 

@@ -30,7 +30,7 @@ concurrency:
 
 jobs:
   judging-consumer:
-    name: Backend producer to Judging c56bc7b
+    name: Backend producer to Judging b2f2702
     runs-on: ubuntu-24.04
     timeout-minutes: 15
 
@@ -42,7 +42,7 @@ jobs:
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           repository: CodeRushOJ/croj-judging-server
-          ref: c56bc7babbb2c3448f310855f58f3fb0b2ded5e1
+          ref: b2f270286c17dddb27557fa80a32bb1dbde67c7d
           path: .contract/judging
 
       - name: Set up Java 17

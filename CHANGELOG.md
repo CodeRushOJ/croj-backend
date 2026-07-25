@@ -6,6 +6,7 @@
 
 ### Added
 
+- Backend→Judging TestBundle v1/v2 CI 契约固定到最终已评审 Judge 提交，并由仓库测试防止本地脚本、GitHub Actions 与 README 的 consumer SHA 再次漂移。
 - OI 实时榜、冻结榜和最终榜：逐题取历史最高分，使用比赛固定分值校验上限，并以总分、得分题数、最后提分时间和用户 ID 生成确定性排名。
 - SMTP 环境配置同时支持本地 Mailpit 明文传输、生产 STARTTLS（587）和隐式 TLS（465），认证、TLS 与凭据不再硬编码。
 - 一次性首个超级管理员 bootstrap 模式：V9 持久化 identity guard、并发幂等创建、BCrypt 密码、审计事件和 Secret-only 生产镜像命令。

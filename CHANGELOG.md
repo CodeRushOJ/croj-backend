@@ -6,6 +6,8 @@
 
 ### Added
 
+- 可扩展 `ProblemPackageParser` 题目导入模型与 FreeProblemSet FPS XML 1.1/1.2/1.4 流式解析器，规范化限制单位、样例、隐藏测试、图片和可选代码资源。
+- FPS 解析契约测试覆盖真实上游 1.4 题包、完整字段映射、版本拒绝、分组测试点配对以及 XXE/非官方 DTD fail-closed 行为。
 - 生产后端镜像：digest 固定的 Maven/JDK 17 builder、Distroless Java 17 runtime、BuildKit 依赖缓存和 OCI provenance/SBOM。
 - shell-free Actuator liveness healthcheck，严格 localhost、连接/读取超时、不跟随重定向且不读取响应体。
 - 容器静态合同与 stopped-container rootfs 导出检查；验证 non-root UID/GID 65532、端口、prod Profile 及 runtime 不含源码/Maven/compiler/shell/package manager。
@@ -18,6 +20,7 @@
 
 ### Security
 
+- FPS XML 导入只允许官方 PUBLIC DOCTYPE 声明，同时禁用 DTD 解析、外部实体与解析器网络访问；题目、文本、测试点和内嵌图片均有硬上限，导入代码资源不会执行。
 - runtime 使用无 shell/包管理器的 Distroless nonroot 基础镜像，Kubernetes 合同固定只读根文件系统，并只允许挂载 `/tmp` 与 `/app/uploads`。
 - 管理端竞赛接口实施角色校验，阻止跨比赛澄清回复、无效题目版本和幽灵参赛用户。
 - 题目编排与发布使用聚合行锁串行化，避免发布竞态破坏比赛题单。

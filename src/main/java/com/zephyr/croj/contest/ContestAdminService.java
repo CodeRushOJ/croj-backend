@@ -7,7 +7,6 @@ import java.io.IOException;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,14 +15,9 @@ public class ContestAdminService {
     private final ContestRepository contests;
     private final ObjectMapper objectMapper;
 
-    @Autowired
-    public ContestAdminService(ContestRepository contests, ObjectMapper objectMapper) {
+    public ContestAdminService(ContestRepository contests) {
         this.contests = contests;
-        this.objectMapper = objectMapper;
-    }
-
-    ContestAdminService(ContestRepository contests) {
-        this(contests, new ObjectMapper());
+        this.objectMapper = new ObjectMapper();
     }
 
     @Transactional

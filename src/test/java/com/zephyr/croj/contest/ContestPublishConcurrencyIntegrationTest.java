@@ -41,12 +41,12 @@ import org.springframework.transaction.annotation.Transactional;
         "DROP TABLE IF EXISTS t_contest",
         "CREATE TABLE t_contest (id BIGINT PRIMARY KEY, title VARCHAR(255), description_markdown CLOB, rule_type VARCHAR(16), visibility VARCHAR(16), lifecycle VARCHAR(16), registration_opens_at TIMESTAMP, registration_closes_at TIMESTAMP, starts_at TIMESTAMP, freeze_at TIMESTAMP, ends_at TIMESTAMP, created_by BIGINT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)",
         "CREATE TABLE t_problem (id BIGINT PRIMARY KEY, is_deleted INT NOT NULL)",
-        "CREATE TABLE t_problem_version (id BIGINT PRIMARY KEY, problem_id BIGINT NOT NULL, state VARCHAR(20) NOT NULL)",
+        "CREATE TABLE t_problem_version (id BIGINT PRIMARY KEY, problem_id BIGINT NOT NULL, state VARCHAR(20) NOT NULL, limits_json CLOB NOT NULL, judge_config_json CLOB NOT NULL)",
         "CREATE TABLE t_test_bundle (id BIGINT PRIMARY KEY, problem_version_id BIGINT NOT NULL UNIQUE)",
         "CREATE TABLE t_contest_problem (contest_id BIGINT, problem_id BIGINT, problem_version_id BIGINT, label VARCHAR(16), score INT, PRIMARY KEY(contest_id,problem_id), UNIQUE(contest_id,label))",
         "INSERT INTO t_contest VALUES (1,'Weekly','d','ACM','PUBLIC','DRAFT','2026-07-01 00:00:00','2026-07-09 00:00:00','2026-07-10 00:00:00','2026-07-10 01:30:00','2026-07-10 02:00:00',9,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)",
         "INSERT INTO t_problem VALUES (42,0),(43,0)",
-        "INSERT INTO t_problem_version VALUES (101,42,'PUBLISHED'),(102,43,'PUBLISHED')",
+        "INSERT INTO t_problem_version VALUES (101,42,'PUBLISHED','{\"totalScore\":100}','{\"judgeMode\":0}'),(102,43,'PUBLISHED','{\"totalScore\":100}','{\"judgeMode\":0}')",
         "INSERT INTO t_test_bundle VALUES (1,101),(2,102)",
         "INSERT INTO t_contest_problem VALUES (1,42,101,'A',100)"
 })

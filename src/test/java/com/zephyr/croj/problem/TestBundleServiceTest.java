@@ -19,6 +19,8 @@ import com.zephyr.croj.model.entity.TestBundle;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -185,11 +187,28 @@ class TestBundleServiceTest {
         String unknownField = validManifest().replace(
                 "\"checker\":\"exact\"",
                 "\"checker\":\"exact\",\"inputBytes\":2");
+        String trailingDocument = validManifest() + "{}";
 
         assertThrows(BusinessException.class, () -> service.attach(
                 42L, 101L, new byte[] {1, 2, 3, 4}, stringVersion));
         assertThrows(BusinessException.class, () -> service.attach(
                 42L, 101L, new byte[] {1, 2, 3, 4}, unknownField));
+        assertThrows(BusinessException.class, () -> service.attach(
+                42L, 101L, new byte[] {1, 2, 3, 4}, trailingDocument));
+
+        verifyNoInteractions(storage);
+        verifyNoInteractions(bundles);
+    }
+
+    @Test
+    void rejectsEmbeddedManifestWithATrailingJsonDocument() {
+        draftVersion();
+        String embedded = validManifest() + "{}";
+
+        assertThrows(BusinessException.class, () -> service.attach(
+                42L,
+                101L,
+                bundleZip(embedded, Map.of("cases/1.in", "in", "cases/1.out", "ok"))));
 
         verifyNoInteractions(storage);
         verifyNoInteractions(bundles);
@@ -261,6 +280,121 @@ class TestBundleServiceTest {
     }
 
     @Test
+    void attachesAnOiManifestV2WithPositiveWeightsAndMatchingTotalScore() throws Exception {
+        draftVersion(1, false, "token");
+        when(bundles.insert(any(TestBundle.class))).thenReturn(1);
+        String manifest = """
+                {"schemaVersion":2,"judgeMode":"OI","checker":"token",
+                 "limits":{"timeLimitMillis":1000,"memoryLimitMiB":64},"totalScore":100,
+                 "cases":[
+                  {"id":"sample-1","input":"cases/1.in","output":"cases/1.out","weight":30},
+                  {"id":"sample-2","input":"cases/2.in","output":"cases/2.out","weight":70}
+                 ]}
+                """;
+        byte[] archive = bundleZip(manifest, Map.of(
+                "cases/1.in", "1", "cases/1.out", "one",
+                "cases/2.in", "2", "cases/2.out", "two"));
+
+        TestBundle attached = service.attach(42L, 101L, archive);
+
+        assertEquals(2, new ObjectMapper()
+                .readTree(attached.getManifestJson())
+                .path("schemaVersion")
+                .asInt());
+        verify(storage).put(attached.getObjectKey(), archive, attached.getSha256());
+    }
+
+    @Test
+    void acceptsOiExactBundlesWithSafeFilesAtTheArchiveRoot() {
+        draftVersion(1, false, "exact");
+        when(bundles.insert(any(TestBundle.class))).thenReturn(1);
+        String manifest = """
+                {"schemaVersion":2,"judgeMode":"OI","checker":"exact",
+                 "limits":{"timeLimitMillis":1000,"memoryLimitMiB":64},"totalScore":100,
+                 "cases":[
+                  {"id":"1","input":"1.in","output":"1.out","weight":100}
+                 ]}
+                """;
+        byte[] archive = bundleZip(manifest, Map.of("1.in", "input", "1.out", "answer"));
+
+        assertDoesNotThrow(() -> service.attach(42L, 101L, archive));
+    }
+
+    @Test
+    void rejectsOiManifestV2WhenWeightsDoNotEqualTheImmutableTotalScore() {
+        draftVersion(1, false, "exact");
+        String manifest = """
+                {"schemaVersion":2,"judgeMode":"OI","checker":"exact",
+                 "limits":{"timeLimitMillis":1000,"memoryLimitMiB":64},"totalScore":100,
+                 "cases":[
+                  {"id":"1","input":"cases/1.in","output":"cases/1.out","weight":99}
+                 ]}
+                """;
+
+        assertThrows(BusinessException.class, () -> service.attach(
+                42L,
+                101L,
+                bundleZip(manifest, Map.of("cases/1.in", "in", "cases/1.out", "ok"))));
+
+        verifyNoInteractions(storage);
+        verifyNoInteractions(bundles);
+    }
+
+    @Test
+    void attachesASpecialJudgeManifestV2OnlyWhenSourceAndSnapshotAgree() throws Exception {
+        String source = "#include <iostream>\nint main(){return 0;}\n";
+        draftSpecialVersion(1, source, "cpp");
+        when(bundles.insert(any(TestBundle.class))).thenReturn(1);
+        String manifest = """
+                {"schemaVersion":2,"judgeMode":"OI","checker":"special",
+                 "limits":{"timeLimitMillis":1000,"memoryLimitMiB":64},"totalScore":100,
+                 "specialJudge":{"language":"cpp","source":"checker/main.cpp",
+                   "sourceSha256":"%s","timeLimitMillis":2000,"memoryLimitMiB":128},
+                 "cases":[
+                  {"id":"1","input":"cases/1.in","output":"cases/1.out","weight":100}
+                 ]}
+                """.formatted(sha256(source));
+        byte[] archive = bundleZip(manifest, Map.of(
+                "checker/main.cpp", source,
+                "cases/1.in", "in",
+                "cases/1.out", "ok"));
+
+        TestBundle attached = service.attach(42L, 101L, archive);
+
+        assertEquals("special", new ObjectMapper()
+                .readTree(attached.getManifestJson())
+                .path("checker")
+                .asText());
+        verify(storage).put(attached.getObjectKey(), archive, attached.getSha256());
+    }
+
+    @Test
+    void rejectsSpecialJudgeSourceTamperingBeforeObjectStorage() {
+        String source = "int main() { return 0; }";
+        draftSpecialVersion(0, source, "cpp");
+        String manifest = """
+                {"schemaVersion":2,"judgeMode":"ACM","checker":"special",
+                 "limits":{"timeLimitMillis":1000,"memoryLimitMiB":64},
+                 "specialJudge":{"language":"cpp","source":"checker/main.cpp",
+                   "sourceSha256":"%s","timeLimitMillis":2000,"memoryLimitMiB":128},
+                 "cases":[
+                  {"id":"1","input":"cases/1.in","output":"cases/1.out","weight":1}
+                 ]}
+                """.formatted(sha256(source));
+
+        assertThrows(BusinessException.class, () -> service.attach(
+                42L,
+                101L,
+                bundleZip(manifest, Map.of(
+                        "checker/main.cpp", source + "\n// tampered",
+                        "cases/1.in", "in",
+                        "cases/1.out", "ok"))));
+
+        verifyNoInteractions(storage);
+        verifyNoInteractions(bundles);
+    }
+
+    @Test
     void rejectsAManifestWhoseCheckerDiffersFromTheProblemVersion() {
         draftVersion(0, false, "token");
         String manifest = validManifest();
@@ -273,6 +407,29 @@ class TestBundleServiceTest {
                 () -> service.attach(42L, 101L, archive, manifest));
 
         assertEquals("problem version is incompatible with TestBundle v1", exception.getMessage());
+        verifyNoInteractions(storage);
+        verifyNoInteractions(bundles);
+    }
+
+    @Test
+    void rejectsSnapshotFieldsThatTheJudgingConsumerWouldReject() {
+        draftVersion();
+        ProblemVersion version = versions.selectById(101L);
+        version.setLimitsJson(
+                "{\"timeLimit\":1000,\"memoryLimit\":64,\"totalScore\":100,\"extra\":true}");
+
+        assertThrows(BusinessException.class, () -> service.attach(
+                42L, 101L, new byte[] {1, 2, 3, 4}, validManifest()));
+
+        version.setLimitsJson("{\"timeLimit\":1000,\"memoryLimit\":64,\"totalScore\":100}");
+        version.setJudgeConfigJson(
+                "{\"judgeMode\":0,\"specialJudge\":false,\"specialJudgeCode\":null,"
+                        + "\"specialJudgeLanguage\":null,\"checker\":\"exact\","
+                        + "\"difficulty\":2,\"extra\":true}");
+
+        assertThrows(BusinessException.class, () -> service.attach(
+                42L, 101L, new byte[] {1, 2, 3, 4}, validManifest()));
+
         verifyNoInteractions(storage);
         verifyNoInteractions(bundles);
     }
@@ -445,6 +602,21 @@ class TestBundleServiceTest {
         when(versions.selectById(101L)).thenReturn(version);
     }
 
+    private void draftSpecialVersion(int judgeMode, String source, String language) {
+        ProblemVersion version = new ProblemVersion();
+        version.setId(101L);
+        version.setProblemId(42L);
+        version.setState("DRAFT");
+        version.setProjectionComplete(true);
+        version.setStatementJson(completeStatement());
+        version.setLimitsJson("{\"timeLimit\":1000,\"memoryLimit\":64,\"totalScore\":100}");
+        version.setJudgeConfigJson("""
+                {"judgeMode":%d,"specialJudge":true,"specialJudgeCode":%s,
+                 "specialJudgeLanguage":"%s","checker":"special","difficulty":2}
+                """.formatted(judgeMode, jsonString(source), language));
+        when(versions.selectById(101L)).thenReturn(version);
+    }
+
     private String completeStatement() {
         return """
                 {"title":"A","description":"D","inputDescription":"I",
@@ -466,6 +638,24 @@ class TestBundleServiceTest {
                   {"id":"1","input":"cases/1.in","output":"cases/1.out","weight":1}
                 ]}
                 """;
+    }
+
+    private String sha256(String value) {
+        try {
+            return java.util.HexFormat.of().formatHex(
+                    MessageDigest.getInstance("SHA-256")
+                            .digest(value.getBytes(StandardCharsets.UTF_8)));
+        } catch (NoSuchAlgorithmException exception) {
+            throw new AssertionError(exception);
+        }
+    }
+
+    private String jsonString(String value) {
+        try {
+            return new ObjectMapper().writeValueAsString(value);
+        } catch (com.fasterxml.jackson.core.JsonProcessingException exception) {
+            throw new AssertionError(exception);
+        }
     }
 
     private String manifestWithCaseCount(int count) {

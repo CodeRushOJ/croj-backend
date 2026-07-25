@@ -44,19 +44,57 @@ AWS S3 可省略 `TEST_BUNDLE_S3_ENDPOINT` 并按部署区域设置 `AWS_REGION`
 }
 ```
 
-这是 Backend 与 Judging Server 共用的严格 v1 契约：只接受 `schemaVersion=1`、`judgeMode=ACM`、`checker=exact|token`；绑定的不可变 `ProblemVersion` 必须 `projection_complete=1`、`judgeMode=0`、`specialJudge=false`，而且版本 checker 必须与 manifest 相同；`limits` 的时间和内存必须为正整数，并与版本 `limits_json` 完全一致；`cases` 不得为空，字符串 ID 必须匹配 `[A-Za-z0-9][A-Za-z0-9._-]{0,63}` 且唯一；ACM 权重必须为 `1`；输入输出路径必须是 `cases/` 下的安全相对路径且互不重复。未知字段会被拒绝。
+v1 是永久兼容合同：只接受 `schemaVersion=1`、`judgeMode=ACM`、`checker=exact|token`。v2 在相同的 limits/cases 基础上增加 OI 正权重计分和隔离特殊判题：
 
-attach 会在访问对象存储之前执行上述双边合同校验；publish 会重新读取数据库中的版本和 manifest 再校验一次。因此 OI、SPJ、checker 不一致、不完整历史版本和手工插入的 TestBundle 都会失败关闭。上传阶段通过管理 API 返回稳定 422，发布阶段返回稳定 409；管理端应修正版本配置或创建新的完整草稿，不能重试绕过。
+```json
+{
+  "schemaVersion": 2,
+  "judgeMode": "OI",
+  "checker": "special",
+  "limits": {
+    "timeLimitMillis": 1000,
+    "memoryLimitMiB": 256
+  },
+  "totalScore": 100,
+  "specialJudge": {
+    "language": "cpp",
+    "source": "checker/main.cpp",
+    "sourceSha256": "<64 lowercase hex characters>",
+    "timeLimitMillis": 2000,
+    "memoryLimitMiB": 128
+  },
+  "cases": [
+    {
+      "id": "subtask-1",
+      "input": "cases/1.in",
+      "output": "cases/1.out",
+      "weight": 30
+    },
+    {
+      "id": "subtask-2",
+      "input": "cases/2.in",
+      "output": "cases/2.out",
+      "weight": 70
+    }
+  ]
+}
+```
 
-ZIP 根目录必须含且只含一个 `manifest.json`，其规范化结构必须与数据库 `manifest_json` 完全一致；其余文件必须恰好是 manifest 引用的测试输入输出。`TestBundleService` 是最终信任边界：它只采用与 Judging Server 相同的中央目录视图，不再依赖可被截断或伪造的 local-header-only 视图，并拒绝加密、symlink/非普通文件、不支持的压缩方法、路径穿越、重复/未声明/缺失文件、manifest 不一致、非法 UTF-8、单文件或总解压大小超限；每个 entry 还会独立校验压缩比、CRC 与声明大小。Backend 最多接受 256 个测试点；manifest 上限为 1 MiB，单文件和整个 bundle 的展开预算均为 63 MiB，压缩比阈值为 200。这为 Judging Server 的 64 MiB batch wire 上限保留至少 1 MiB 给源码和协议开销。FPS 解析器还会独立限制题目数、文本、测试点、内嵌图片并禁止 DTD/XXE 和网络访问。
+绑定的不可变 `ProblemVersion` 必须 `projection_complete=1`，而且版本 judgeMode、checker、时间、内存和 OI totalScore 必须与 manifest 完全一致。OI 每个权重必须为正整数，`totalScore` 必须严格等于权重总和；ACM 权重仍必须为 `1` 且不允许 totalScore。special checker 必须固定 `go|cpp|python|java|javascript` 源码、路径和小写 SHA-256，源码最多 4 MiB，独立时间/内存限制为正整数；源码内容、语言和摘要必须与版本快照一致。字符串 ID 必须匹配 `[A-Za-z0-9][A-Za-z0-9._-]{0,63}` 且唯一。所有 artifact 路径必须是清理后不变化的安全相对路径，不要求固定目录前缀，但 `manifest.json` 保留且全部 case/SPJ 路径必须全局唯一。未知字段会被拒绝。
+
+attach 会在访问对象存储之前执行上述双边合同校验；publish 会重新读取数据库中的版本和 manifest 再校验一次。因此权重/总分、SPJ 源码摘要、checker、不完整历史版本或手工插入元数据的任何不一致都会失败关闭。上传阶段通过管理 API 返回稳定 422，发布阶段返回稳定 409；管理端应修正版本配置或创建新的完整草稿，不能重试绕过。
+
+ZIP 根目录必须含且只含一个 `manifest.json`，其规范化结构必须与数据库 `manifest_json` 完全一致；其余文件必须恰好是 manifest 引用的测试输入、输出和可选 checker source。`TestBundleService` 是最终信任边界：它只采用与 Judging Server 相同的中央目录视图，不再依赖可被截断或伪造的 local-header-only 视图，并拒绝加密、symlink/非普通文件、不支持的压缩方法、路径穿越、重复/未声明/缺失文件、manifest 不一致、SPJ 摘要不一致、非法 UTF-8、单文件或总解压大小超限；每个 entry 还会独立校验压缩比、CRC 与声明大小。Backend 最多接受 256 个测试点；manifest 上限为 1 MiB，单 case 和整个 bundle 的展开预算均为 63 MiB，SPJ source 另有 4 MiB 硬上限，压缩比阈值为 200。这为 Judging Server 的 64 MiB batch wire 上限保留协议开销。FPS 解析器还会独立限制题目数、文本、测试点、内嵌图片并禁止 DTD/XXE 和网络访问。
+
+`TestBundleArchiveWriter` 是后端正式 producer：固定 1980-01-01 UTC 时间、Unix `0600` 权限、manifest-first、其余 entry 按路径排序并使用 level-0 DEFLATE。保留 Judging 接受的 DEFLATED wire method，同时避免高重复测试数据被自身 200:1 防炸弹门禁拒绝。因此相同 manifest 和文件映射会产生逐字节相同的 ZIP；数据库 SHA-256、size 与 manifest 必须全部来自这一个 artifact，不能分别手写。
 
 ## Publication flow
 
 1. 创建题目与不可变 `ProblemVersion(DRAFT)`，在 `statement_json.tags` 冻结有序 `{id,name,color}` 标签，并将 `projection_complete` 设为真。
-2. 解析器规范化测试文件，生成 canonical v1 manifest，并把同一 JSON 写入 ZIP 根目录 `manifest.json`。
+2. 解析器或管理员工具规范化测试文件，生成 canonical v1/v2 manifest，并把同一 JSON 写入 ZIP 根目录 `manifest.json`。
 3. `TestBundleService` 校验限制，计算 SHA-256，并写入内容寻址的私有对象。
 4. 写入唯一的 `t_test_bundle.problem_version_id` 元数据。
-5. `ProblemVersionPublicationService` 先锁定题目聚合行，再锁定版本与测试包，重新验证 v1 双边合同，然后原子更新版本为 `PUBLISHED`、题目 `published_version_id`、公开状态和可见标签关系。
+5. `ProblemVersionPublicationService` 先锁定题目聚合行，再锁定版本与测试包，重新验证对应 schema 的双边合同，然后原子更新版本为 `PUBLISHED`、题目 `published_version_id`、公开状态和可见标签关系。
 
 对象写入成功、数据库事务失败时可能留下不可达的内容寻址对象，后续可由 GC 清理；系统不会因此产生已发布但不可判的版本。
 
@@ -93,7 +131,7 @@ GET /api/v1/admin/problems/{problemId}/versions
 GET /api/v1/admin/problems/{problemId}/versions/{versionId}/test-bundle
 ```
 
-随后携带该 ETag 上传完整的 TestBundle v1 ZIP：
+随后携带该 ETag 上传完整的 TestBundle v1 或 v2 ZIP：
 
 ```http
 PUT /api/v1/admin/problems/{problemId}/versions/{versionId}/test-bundle
@@ -127,4 +165,4 @@ file=@fps.xml
 POST /api/v1/admin/problem-imports/{jobId}/commit
 ```
 
-提交会锁定当前管理员拥有的未过期任务，重新下载、验 SHA-256、解析和校验，然后为每道题创建草稿版本、以 `STORED` entry 生成不会触发自身压缩比门禁的确定性 TestBundle，并通过发布门禁公开。整个数据库步骤在一个事务中完成；重复提交已完成任务会返回相同 `importedCount`，不会重复创建题目。
+提交会锁定当前管理员拥有的未过期任务，重新下载、验 SHA-256、解析和校验，然后为每道普通 ACM 题创建草稿版本、通过正式 deterministic writer 生成 v1 TestBundle，并通过发布门禁公开。包含 SPJ/OI 语义的题包必须先由对应格式适配器产生完整 v2 manifest，不能降级为 v1。整个数据库步骤在一个事务中完成；重复提交已完成任务会返回相同 `importedCount`，不会重复创建题目。

@@ -10,6 +10,7 @@ import java.util.Map;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 
 /**
  * 更新问题的数据传输对象
@@ -98,6 +99,10 @@ public class ProblemUpdateDTO implements Serializable {
     @Min(value = 0, message = "评判模式不能小于0")
     @Max(value = 1, message = "评判模式不能大于1")
     private Integer judgeMode;
+
+    /** Immutable output checker pinned into the replacement problem version. */
+    @Pattern(regexp = "exact|token|special", message = "判题器必须为exact、token或special")
+    private String checker;
 
     /**
      * OI模式下的题目总分

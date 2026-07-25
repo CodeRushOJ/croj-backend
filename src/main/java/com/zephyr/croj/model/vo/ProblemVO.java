@@ -91,6 +91,9 @@ public class ProblemVO implements Serializable {
      */
     private Integer judgeMode;
 
+    /** Safe public identifier of the immutable output checker; never includes checker source. */
+    private String checker;
+
     /**
      * OI模式下的题目总分
      */

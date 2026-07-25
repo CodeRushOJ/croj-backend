@@ -105,6 +105,51 @@ class ProblemVersionPublishingTest {
 
     @Test
     @SuppressWarnings("unchecked")
+    void freezesTheRequestedTokenCheckerInTheProblemAndVersionSnapshot() {
+        User admin = new User();
+        admin.setId(2L);
+        admin.setRole(1);
+        when(users.getById(2L)).thenReturn(admin);
+        when(problems.selectOne(any(Wrapper.class), anyBoolean())).thenReturn(null);
+        when(problems.insert(any(Problem.class))).thenAnswer(invocation -> {
+            invocation.<Problem>getArgument(0).setId(11L);
+            return 1;
+        });
+        when(versions.insert(any(ProblemVersion.class))).thenReturn(1);
+        ProblemCreateDTO request = createRequest();
+        request.setChecker("token");
+
+        service.createProblem(request, 2L);
+
+        ArgumentCaptor<Problem> problem = ArgumentCaptor.forClass(Problem.class);
+        verify(problems).insert(problem.capture());
+        assertEquals("token", problem.getValue().getChecker());
+        ArgumentCaptor<ProblemVersion> version = ArgumentCaptor.forClass(ProblemVersion.class);
+        verify(versions).insert(version.capture());
+        assertEquals(
+                true,
+                version.getValue().getJudgeConfigJson().contains("\"checker\":\"token\""));
+    }
+
+    @Test
+    void rejectsSpecialCheckerWithoutAnImmutableSourceAndCanonicalLanguage() {
+        User admin = new User();
+        admin.setId(2L);
+        admin.setRole(1);
+        when(users.getById(2L)).thenReturn(admin);
+        ProblemCreateDTO request = createRequest();
+        request.setChecker("special");
+        request.setIsSpecialJudge(true);
+        request.setSpecialJudgeLanguage("cpp");
+
+        assertThrows(BusinessException.class, () -> service.createProblem(request, 2L));
+
+        verify(problems, never()).insert(any(Problem.class));
+        verify(versions, never()).insert(any(ProblemVersion.class));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
     void requestedTagsMustAllResolveBeforeTheImmutableVersionIsCreated() {
         User admin = new User();
         admin.setId(2L);
@@ -171,6 +216,49 @@ class ProblemVersionPublishingTest {
     }
 
     @Test
+    void disablingSpecialJudgeClearsPrivateSourceBeforeFreezingTheReplacement() {
+        User admin = new User();
+        admin.setId(2L);
+        admin.setRole(1);
+        when(users.getById(2L)).thenReturn(admin);
+        Problem special = problem(11L, 0, 23L);
+        special.setIsSpecialJudge(true);
+        special.setChecker("special");
+        special.setSpecialJudgeCode("int main() { return 0; }");
+        special.setSpecialJudgeLanguage("cpp");
+        when(problems.selectForUpdate(11L)).thenReturn(special);
+        when(problems.updateById(any(Problem.class))).thenReturn(1);
+        when(versions.findLatestVersionNumber(11L)).thenReturn(1);
+        when(versions.insert(any(ProblemVersion.class))).thenReturn(1);
+        ProblemUpdateDTO request = new ProblemUpdateDTO();
+        request.setId(11L);
+        request.setIsSpecialJudge(false);
+        request.setChecker("token");
+
+        service.updateProblem(request, 2L);
+
+        ArgumentCaptor<Problem> updated = ArgumentCaptor.forClass(Problem.class);
+        verify(problems).updateById(updated.capture());
+        assertEquals("token", updated.getValue().getChecker());
+        assertNull(updated.getValue().getSpecialJudgeCode());
+        assertNull(updated.getValue().getSpecialJudgeLanguage());
+        ArgumentCaptor<ProblemVersion> replacement = ArgumentCaptor.forClass(ProblemVersion.class);
+        verify(versions).insert(replacement.capture());
+        assertEquals(
+                true,
+                replacement
+                        .getValue()
+                        .getJudgeConfigJson()
+                        .contains("\"checker\":\"token\""));
+        assertEquals(
+                true,
+                replacement
+                        .getValue()
+                        .getJudgeConfigJson()
+                        .contains("\"specialJudgeCode\":null"));
+    }
+
+    @Test
     void publicReadersSeeThePublishedSnapshotWhileAnEditedDraftRemainsPrivate() {
         User reader = new User();
         reader.setId(7L);
@@ -203,6 +291,7 @@ class ProblemVersionPublishingTest {
         assertEquals(256, view.getMemoryLimit());
         assertEquals(1, view.getDifficulty());
         assertEquals(0, view.getJudgeMode());
+        assertEquals("exact", view.getChecker());
         assertEquals(100, view.getTotalScore());
         assertEquals(1, view.getUserStatus());
         assertEquals("Published title", byNumber.getTitle());

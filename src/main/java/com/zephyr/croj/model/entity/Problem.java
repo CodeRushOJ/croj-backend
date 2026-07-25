@@ -100,6 +100,9 @@ public class Problem implements Serializable {
      */
     private Integer judgeMode;
 
+    /** exact, token or special; copied into every immutable problem version. */
+    private String checker;
+
     /**
      * OI模式下的题目总分
      */

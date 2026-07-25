@@ -182,7 +182,7 @@ class ProblemImportServiceTest {
         assertThat(entries.keySet())
                 .containsExactly("manifest.json", "cases/1.in", "cases/1.out");
         assertThat(zipMethods(archive.getValue()).values())
-                .containsOnly(java.util.zip.ZipEntry.STORED);
+                .containsOnly(java.util.zip.ZipEntry.DEFLATED);
         Path fixture = Path.of("src/test/resources/contracts/test-bundle-v1");
         var fixtureManifest = new ObjectMapper().readTree(Files.readAllBytes(fixture.resolve("manifest.json")));
         assertThat(new ObjectMapper().readTree(entries.get("manifest.json")))

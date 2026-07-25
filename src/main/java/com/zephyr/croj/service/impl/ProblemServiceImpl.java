@@ -37,6 +37,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.time.LocalDateTime;
+import java.nio.charset.StandardCharsets;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -77,6 +78,7 @@ public class ProblemServiceImpl extends ServiceImpl<ProblemMapper, Problem> impl
         // 创建问题实体
         Problem problem = new Problem();
         BeanUtils.copyProperties(dto, problem, nullPropertyNames(dto));
+        normalizeJudgeConfiguration(problem);
 
         // 新题先进入私有草稿；绑定隐藏测试包后再通过发布门禁公开。
         problem.setStatus(1);
@@ -133,6 +135,14 @@ public class ProblemServiceImpl extends ServiceImpl<ProblemMapper, Problem> impl
 
         // 更新问题
         BeanUtils.copyProperties(dto, problem, nullPropertyNames(dto));
+        if (dto.getChecker() == null && dto.getIsSpecialJudge() != null) {
+            problem.setChecker(Boolean.TRUE.equals(dto.getIsSpecialJudge()) ? "special" : "exact");
+        }
+        if (Boolean.FALSE.equals(dto.getIsSpecialJudge())) {
+            problem.setSpecialJudgeCode(null);
+            problem.setSpecialJudgeLanguage(null);
+        }
+        normalizeJudgeConfiguration(problem);
 
         // 编辑产生新的草稿版本；已有稳定版本继续对外，直到新版本原子发布。
         if (stablePublishedVersionId == null) {
@@ -456,6 +466,7 @@ public class ProblemServiceImpl extends ServiceImpl<ProblemMapper, Problem> impl
                     ? null
                     : specialJudgeLanguage.textValue());
             view.setJudgeMode(requiredInt(judge, "judgeMode"));
+            view.setChecker(requiredText(judge, "checker"));
             view.setDifficulty(requiredInt(judge, "difficulty"));
         } catch (JsonProcessingException
                 | IllegalArgumentException
@@ -633,9 +644,46 @@ public class ProblemServiceImpl extends ServiceImpl<ProblemMapper, Problem> impl
         snapshot.put("specialJudgeCode", problem.getSpecialJudgeCode());
         snapshot.put("specialJudgeLanguage", problem.getSpecialJudgeLanguage());
         snapshot.put("judgeMode", problem.getJudgeMode());
-        snapshot.put("checker", "exact");
+        snapshot.put("checker", problem.getChecker());
         snapshot.put("difficulty", problem.getDifficulty());
         return snapshot;
+    }
+
+    private void normalizeJudgeConfiguration(Problem problem) {
+        boolean special = Boolean.TRUE.equals(problem.getIsSpecialJudge());
+        String checker = problem.getChecker();
+        if (checker == null || checker.isBlank()) {
+            checker = special ? "special" : "exact";
+            problem.setChecker(checker);
+        }
+        if (!Set.of("exact", "token", "special").contains(checker)
+                || special != "special".equals(checker)) {
+            throw new BusinessException(
+                    ResultCodeEnum.PARAM_ERROR.getCode(),
+                    "checker and specialJudge configuration disagree");
+        }
+        if (special) {
+            String source = problem.getSpecialJudgeCode();
+            String language = problem.getSpecialJudgeLanguage();
+            if (source == null
+                    || source.isBlank()
+                    || source.getBytes(StandardCharsets.UTF_8).length > (4 << 20)
+                    || !Set.of("go", "cpp", "python", "java", "javascript")
+                            .contains(language)) {
+                throw new BusinessException(
+                        ResultCodeEnum.PARAM_ERROR.getCode(),
+                        "special judge source or language is invalid");
+            }
+        } else if (problem.getSpecialJudgeCode() != null
+                || problem.getSpecialJudgeLanguage() != null) {
+            throw new BusinessException(
+                    ResultCodeEnum.PARAM_ERROR.getCode(),
+                    "non-special checker contains stale special judge fields");
+        }
+        if (Integer.valueOf(1).equals(problem.getJudgeMode())
+                && (problem.getTotalScore() == null || problem.getTotalScore() <= 0)) {
+            problem.setTotalScore(100);
+        }
     }
 
     private String toJson(Map<String, Object> value) {

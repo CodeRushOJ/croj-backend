@@ -49,6 +49,7 @@
 
 ### Security
 
+- 将 `at.yawk.lz4:lz4-java` 提升到 `1.11.1` 安全下限，修复恶意边界参数可使原生 XXHash 实现导致 JVM 崩溃的问题，并由构建契约阻止版本回退。
 - Maven Enforcer 显式禁止无修复版本的 `commons-fileupload` 进入直接或传递依赖，候选依赖树保持零引用。
 - 生产依赖门禁移除无安全修复的 penggle/kaptcha，改用 `SecureRandom` 验证码生成器；RocketMQ 的 Netty、gRPC、Protobuf、BeanUtils 与 lz4 传递依赖升级到已修复版本，并由 Maven Enforcer 阻止回退。
 - Trivy 仍阻断全部应用级 HIGH/CRITICAL；仅对 Distroless Debian 13 当前无修复包的 7 个 OS finding 使用包级、带说明且 2026-08-31 到期的临时例外。

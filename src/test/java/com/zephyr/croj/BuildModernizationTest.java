@@ -30,7 +30,7 @@ class BuildModernizationTest {
         assertTrue(pom.contains("<protobuf.version>3.25.5</protobuf.version>"));
         assertTrue(pom.contains("<commons-beanutils.version>1.11.0</commons-beanutils.version>"));
         assertTrue(pom.contains("<exclude>commons-fileupload:commons-fileupload</exclude>"));
-        assertTrue(pom.contains("<lz4-java.version>1.10.1</lz4-java.version>"));
+        assertTrue(pom.contains("<lz4-java.version>1.11.1</lz4-java.version>"));
         assertTrue(pom.contains("<groupId>at.yawk.lz4</groupId>"));
         assertTrue(pom.contains("<artifactId>rocketmq-logback-classic</artifactId>"));
         assertTrue(pom.contains("<artifactId>rocketmq-shaded-slf4j-api-bridge</artifactId>"));

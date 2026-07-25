@@ -70,6 +70,7 @@
 
 ### Changed
 
+- S3-compatible TestBundle 与题目包上传仅在协议要求时启用 AWS SDK checksum，避免新版 SDK 默认 `CRC32`/`aws-chunked` 请求被 SeaweedFS 等兼容存储拒绝并返回 HTTP 500。
 - Release job 增加 GitHub `attestations: write` 最小权限，避免镜像推送成功后 OIDC provenance 因 API `403` 无法落库。
 - Release job 使用能按 peeled commit 比较 annotated tag 的固定 checkout 版本，避免 runner 本地 tag ref 被错误覆盖成轻量标签。
 - ACM/OI 榜单统一返回带 `ruleType` 的稳定结构；快照 source version 升级为 v4，由同一次有效报名、固定题目和终态提交事实读取生成，避免实时榜重复扫描；分数、用户名、报名和软删除变化会使冻结缓存立即失效。

@@ -8,6 +8,7 @@ pom="$repo_root/pom.xml"
 trivy_ignores="$repo_root/.trivyignore.yaml"
 prod_config="$repo_root/src/main/resources/application-prod.yml"
 healthcheck_source="$repo_root/src/main/java/com/coderushoj/container/ActuatorHealthCheck.java"
+s3_config_source="$repo_root/src/main/java/com/zephyr/croj/config/TestBundleStorageConfig.java"
 workflow="${IMAGE_WORKFLOW_FILE:-$repo_root/.github/workflows/image.yml}"
 
 fail() {
@@ -35,7 +36,7 @@ reject_pattern() {
   fi
 }
 
-for required in "$dockerfile" "$dockerignore" "$pom" "$trivy_ignores" "$prod_config" "$healthcheck_source" "$workflow"; do
+for required in "$dockerfile" "$dockerignore" "$pom" "$trivy_ignores" "$prod_config" "$healthcheck_source" "$s3_config_source" "$workflow"; do
   require_file "$required"
 done
 
@@ -76,6 +77,9 @@ require_pattern "$healthcheck_source" 'setConnectTimeout\(' 'healthcheck must se
 require_pattern "$healthcheck_source" 'setReadTimeout\(' 'healthcheck must set a read timeout'
 require_pattern "$healthcheck_source" 'setInstanceFollowRedirects\(false\)' 'healthcheck must reject redirects'
 reject_pattern "$healthcheck_source" 'getInputStream\(|getErrorStream\(' 'healthcheck must not read or print a response body'
+
+require_pattern "$s3_config_source" 'requestChecksumCalculation\(RequestChecksumCalculation\.WHEN_REQUIRED\)' 'S3-compatible uploads must disable optional aws-chunked request checksums'
+require_pattern "$s3_config_source" 'responseChecksumValidation\(ResponseChecksumValidation\.WHEN_REQUIRED\)' 'S3-compatible downloads must require explicitly requested response checksums'
 
 require_pattern "$prod_config" 'shutdown:[[:space:]]+graceful' 'prod profile must enable graceful shutdown'
 require_pattern "$prod_config" 'timeout-per-shutdown-phase:[[:space:]]+30s' 'shutdown phase timeout must match the Helm grace period'

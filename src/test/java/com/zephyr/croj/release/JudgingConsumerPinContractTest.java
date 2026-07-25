@@ -10,7 +10,7 @@ import org.junit.jupiter.api.Test;
 class JudgingConsumerPinContractTest {
 
     private static final String FINAL_JUDGING_COMMIT =
-            "5999b368b66f6a2105e541966f2572ddb9a9a5dd";
+            "34d339b341e3a59e364ac722acf27b89e2f81085";
 
     @Test
     void localAndGithubContractsUseTheReviewedFinalJudgingCommit() throws IOException {

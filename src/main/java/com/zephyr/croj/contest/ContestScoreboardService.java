@@ -3,8 +3,14 @@ package com.zephyr.croj.contest;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.swagger.v3.oas.annotations.media.Schema;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -71,30 +77,35 @@ public class ContestScoreboardService {
             Instant cutoffExclusive,
             boolean frozen,
             boolean cacheable) {
-        String sourceVersion = contests.scoreboardSourceVersion(contest.id(), cutoffExclusive);
-        if (cacheable) {
-            var cached = readSnapshot(contest.id(), cutoffExclusive, sourceVersion);
-            if (cached != null) {
-                return new ScoreboardView(
-                        contest.id(),
-                        contest.ruleType(),
-                        cutoffExclusive,
-                        frozen,
-                        sourceVersion,
-                        cached.maximumScore(),
-                        cached.rows());
-            }
-        }
         var participants = contests.registeredParticipants(contest.id());
+        var problems = contests.listProblems(contest.id());
         SnapshotPayload snapshot;
+        String sourceVersion;
+        boolean snapshotComputed = false;
         if ("ACM".equalsIgnoreCase(contest.ruleType())) {
-            snapshot = acmBoard(contest, participants, cutoffExclusive);
+            var facts = contests.submissionFacts(contest.id(), cutoffExclusive);
+            sourceVersion = sourceVersion(participants, problems, facts, List.of());
+            snapshot = cacheable
+                    ? readSnapshot(contest, cutoffExclusive, sourceVersion)
+                    : null;
+            if (snapshot == null) {
+                snapshot = acmBoard(contest, participants, problems, facts, cutoffExclusive);
+                snapshotComputed = true;
+            }
         } else if ("OI".equalsIgnoreCase(contest.ruleType())) {
-            snapshot = oiBoard(contest, participants, cutoffExclusive);
+            var facts = contests.oiSubmissionFacts(contest.id(), cutoffExclusive);
+            sourceVersion = sourceVersion(participants, problems, List.of(), facts);
+            snapshot = cacheable
+                    ? readSnapshot(contest, cutoffExclusive, sourceVersion)
+                    : null;
+            if (snapshot == null) {
+                snapshot = oiBoard(contest, participants, problems, facts, cutoffExclusive);
+                snapshotComputed = true;
+            }
         } else {
             throw new IllegalStateException("persisted contest rule type is unsupported");
         }
-        if (cacheable) {
+        if (cacheable && snapshotComputed) {
             writeSnapshot(contest.id(), cutoffExclusive, sourceVersion, snapshot);
         }
         return new ScoreboardView(
@@ -110,14 +121,16 @@ public class ContestScoreboardService {
     private SnapshotPayload acmBoard(
             ContestRepository.ContestRecord contest,
             List<ContestRepository.Participant> participants,
+            List<ContestRepository.ContestProblem> pinnedProblems,
+            List<AcmScoreboardCalculator.SubmissionFact> facts,
             Instant cutoffExclusive) {
-        var problems = contests.listProblems(contest.id()).stream()
+        var problems = pinnedProblems.stream()
                 .map(problem -> new AcmScoreboardCalculator.Problem(problem.problemId(), problem.label()))
                 .toList();
         var board = AcmScoreboardCalculator.calculate(
                 participantIds(participants),
                 problems,
-                contests.submissionFacts(contest.id(), cutoffExclusive),
+                facts,
                 contest.startsAt(),
                 cutoffExclusive);
         Map<Long, String> participantNames = participantNames(participants);
@@ -131,15 +144,17 @@ public class ContestScoreboardService {
     private SnapshotPayload oiBoard(
             ContestRepository.ContestRecord contest,
             List<ContestRepository.Participant> participants,
+            List<ContestRepository.ContestProblem> pinnedProblems,
+            List<OiScoreboardCalculator.SubmissionFact> facts,
             Instant cutoffExclusive) {
-        var problems = contests.listProblems(contest.id()).stream()
+        var problems = pinnedProblems.stream()
                 .map(problem -> new OiScoreboardCalculator.Problem(
                         problem.problemId(), problem.label(), problem.score()))
                 .toList();
         var board = OiScoreboardCalculator.calculate(
                 participantIds(participants),
                 problems,
-                contests.oiSubmissionFacts(contest.id(), cutoffExclusive),
+                facts,
                 contest.startsAt(),
                 cutoffExclusive);
         Map<Long, String> participantNames = participantNames(participants);
@@ -161,8 +176,9 @@ public class ContestScoreboardService {
                         ContestRepository.Participant::username));
     }
 
-    private SnapshotPayload readSnapshot(long contestId, Instant cutoff, String sourceVersion) {
-        return contests.findScoreboardSnapshot(contestId, "PUBLIC", cutoff, sourceVersion)
+    private SnapshotPayload readSnapshot(
+            ContestRepository.ContestRecord contest, Instant cutoff, String sourceVersion) {
+        return contests.findScoreboardSnapshot(contest.id(), "PUBLIC", cutoff, sourceVersion)
                 .flatMap(payload -> {
                     try {
                         JsonNode root = objectMapper.readTree(payload);
@@ -172,14 +188,106 @@ public class ContestScoreboardService {
                         if (!root.isObject()) {
                             throw new JsonProcessingException("scoreboard snapshot root must be an object") {};
                         }
-                        return java.util.Optional.of(objectMapper.treeToValue(root, SnapshotPayload.class));
+                        SnapshotPayload snapshot = objectMapper.treeToValue(root, SnapshotPayload.class);
+                        if (!validSnapshot(contest.ruleType(), snapshot)) {
+                            throw new JsonProcessingException("scoreboard snapshot is semantically invalid") {};
+                        }
+                        return java.util.Optional.of(snapshot);
                     } catch (JsonProcessingException exception) {
-                        log.warn("discarding unreadable contest scoreboard snapshot: contestId={}", contestId);
+                        log.warn("discarding unreadable contest scoreboard snapshot: contestId={}", contest.id());
                         log.debug("unreadable contest scoreboard snapshot details", exception);
                         return java.util.Optional.empty();
                     }
                 })
                 .orElse(null);
+    }
+
+    private boolean validSnapshot(String ruleType, SnapshotPayload snapshot) {
+        if (snapshot == null || snapshot.rows() == null) {
+            return false;
+        }
+        boolean oi = "OI".equalsIgnoreCase(ruleType);
+        if ((oi && (snapshot.maximumScore() == null || snapshot.maximumScore() < 0))
+                || (!oi && snapshot.maximumScore() != null)) {
+            return false;
+        }
+        for (int index = 0; index < snapshot.rows().size(); index++) {
+            ScoreboardRow row = snapshot.rows().get(index);
+            if (row == null
+                    || row.rank() != index + 1
+                    || row.username() == null
+                    || row.username().isBlank()
+                    || row.problems() == null) {
+                return false;
+            }
+            if (oi) {
+                if (row.totalScore() == null
+                        || row.solved() != null) {
+                    return false;
+                }
+            } else if (row.solved() == null
+                    || row.totalScore() != null) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private String sourceVersion(
+            List<ContestRepository.Participant> participants,
+            List<ContestRepository.ContestProblem> problems,
+            List<AcmScoreboardCalculator.SubmissionFact> acmFacts,
+            List<OiScoreboardCalculator.SubmissionFact> oiFacts) {
+        MessageDigest digest = sha256();
+        digestField(digest, "contest-scoreboard-v4");
+        participants.forEach(participant -> {
+            digestField(digest, "participant");
+            digestField(digest, participant.userId());
+            digestField(digest, participant.username());
+        });
+        problems.forEach(problem -> {
+            digestField(digest, "problem");
+            digestField(digest, problem.problemId());
+            digestField(digest, problem.problemVersionId());
+            digestField(digest, problem.label());
+            digestField(digest, problem.score());
+        });
+        acmFacts.forEach(fact -> {
+            digestField(digest, "acm-submission");
+            digestField(digest, fact.submissionId());
+            digestField(digest, fact.userId());
+            digestField(digest, fact.problemId());
+            digestField(digest, fact.status());
+            digestField(digest, fact.submittedAt().toEpochMilli());
+        });
+        oiFacts.forEach(fact -> {
+            digestField(digest, "oi-submission");
+            digestField(digest, fact.submissionId());
+            digestField(digest, fact.userId());
+            digestField(digest, fact.problemId());
+            digestField(digest, fact.score());
+            digestField(digest, fact.submittedAt().toEpochMilli());
+        });
+        return HexFormat.of().formatHex(digest.digest());
+    }
+
+    private MessageDigest sha256() {
+        try {
+            return MessageDigest.getInstance("SHA-256");
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 is unavailable", exception);
+        }
+    }
+
+    private void digestField(MessageDigest digest, Object value) {
+        if (value == null) {
+            digest.update((byte) 0);
+            return;
+        }
+        byte[] bytes = value.toString().getBytes(StandardCharsets.UTF_8);
+        digest.update((byte) 1);
+        digest.update(ByteBuffer.allocate(Integer.BYTES).putInt(bytes.length).array());
+        digest.update(bytes);
     }
 
     private void writeSnapshot(
@@ -194,24 +302,38 @@ public class ContestScoreboardService {
 
     record SnapshotPayload(Integer maximumScore, List<ScoreboardRow> rows) {}
 
+    @Schema(
+            description =
+                    "Contest scoreboard. ruleType selects the ACM or OI field family; fields from the other family are null.")
     public record ScoreboardView(
             long contestId,
+            @Schema(description = "Scoring contract discriminator", allowableValues = {"ACM", "OI"})
             String ruleType,
+            @Schema(description = "Exclusive submission cutoff; submissions exactly at this instant are excluded")
             Instant cutoffExclusive,
+            @Schema(description = "Whether this is the frozen public view")
             boolean frozen,
             String sourceVersion,
+            @Schema(description = "OI total available score; null for ACM")
             Integer maximumScore,
             List<ScoreboardRow> rows) {}
 
+    @Schema(description = "One ranked participant row with mutually exclusive ACM and OI metrics")
     public record ScoreboardRow(
             int rank,
             long userId,
             String username,
+            @Schema(description = "ACM solved count; null for OI")
             Integer solved,
+            @Schema(description = "ACM penalty in minutes; null for OI")
             Integer penaltyMinutes,
+            @Schema(description = "ACM last accepted time; null for OI")
             Instant lastAcceptedAt,
+            @Schema(description = "OI best-score sum; null for ACM")
             Integer totalScore,
+            @Schema(description = "OI problems with a positive best score; null for ACM")
             Integer scoredProblems,
+            @Schema(description = "OI last score-improvement time; null for ACM")
             Instant lastImprovedAt,
             List<ProblemScore> problems) {
         static ScoreboardRow fromAcm(
@@ -245,6 +367,7 @@ public class ContestScoreboardService {
         }
     }
 
+    @Schema(description = "Per-problem ACM acceptance metrics or OI best-score metrics")
     public record ProblemScore(
             long problemId,
             String label,

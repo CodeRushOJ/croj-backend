@@ -81,7 +81,7 @@ Outbox 参数可通过 `.env.example` 中的 `OUTBOX_*` 变量覆盖。`OUTBOX_C
 
 判题器完成任务后调用 `POST /api/internal/v1/judge-results`。后端通过独立强服务令牌鉴权，以 `resultId` 幂等收件，并用数据库 CAS 只允许 `QUEUED/RUNNING` attempt 和 `PENDING` submission 进入一次终态；重复回传返回 `DUPLICATE`，过期 attempt、终态覆盖或复用 `resultId` 返回 HTTP 409。完整事件与回传契约见 [`docs/api/judge-result-ingestion.md`](docs/api/judge-result-ingestion.md)。
 
-竞赛核心支持公开/私有比赛、报名名单、严格赛时题目可见性、公告、私密/公开澄清、固定题目版本的比赛提交，以及带封榜的 ACM/OI 排名。ACM 使用解题数与罚时；OI 对每题取截止时刻前的历史最高分，按总分、得分题数和最后提分时间稳定排序。比赛只持久化 `DRAFT/PUBLISHED/CANCELLED`，运行阶段按时间推导；冻结/最终快照只是可丢弃缓存，提交记录始终是真相源。接口、时间边界、权限和计分规则见 [`docs/api/contests.md`](docs/api/contests.md)。
+竞赛核心支持公开/私有比赛、报名名单、严格赛时题目可见性、公告、私密/公开澄清、固定题目版本的比赛提交，以及带封榜的 ACM/OI 排名。ACM 使用解题数与罚时；OI 对每题取截止时刻前的历史最高分，按总分、得分题数和最后提分时间稳定排序。编排与发布都会校验比赛赛制、不可变题目 `judgeMode`、TestBundle 总分和比赛题目分值完全一致，避免错误配置进入赛时。比赛只持久化 `DRAFT/PUBLISHED/CANCELLED`，运行阶段按时间推导；冻结/最终快照只是可丢弃缓存，提交记录始终是真相源。接口、时间边界、权限和计分规则见 [`docs/api/contests.md`](docs/api/contests.md)。
 
 论坛帖子通过 `resource_type + resource_id` 明确归属全站、公开题目或公开比赛；列表、详情和评论统一执行资源可见性校验，题目页不会混入其他题目的讨论。帖子、评论与题解的删除是状态迁移而非物理删除；公开查询只返回 `PUBLISHED`。题解记录发布时的 `problem_version_id`，确保题目后续更新不会改变历史题解所对应的题面。客户端只提交 Markdown，`content_html` 由服务端生成安全转义内容，禁止客户端注入 HTML。
 

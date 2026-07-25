@@ -4,6 +4,7 @@ import com.zephyr.croj.common.response.Result;
 import com.zephyr.croj.contest.ContestScoreboardService;
 import com.zephyr.croj.contest.ContestService;
 import com.zephyr.croj.model.dto.contest.ContestRequests;
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -80,6 +81,10 @@ public class ContestController {
     }
 
     @GetMapping("/{contestId}/scoreboard")
+    @Operation(
+            summary = "Read the public contest scoreboard",
+            description =
+                    "Returns an explicitly typed ACM or OI board. ACM rows sort by solved desc, penalty asc and last accepted time; OI rows sort by total score desc, scored problems desc and last improvement time. During freeze the public board uses the exclusive [start, freeze) submission window, while the final board uses [start, end). ACM-only and OI-only row fields are mutually exclusive and nullable.")
     public Result<ContestScoreboardService.ScoreboardView> scoreboard(@PathVariable long contestId) {
         return Result.success(scoreboards.publicScoreboard(contestId, userId()));
     }

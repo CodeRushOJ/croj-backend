@@ -58,6 +58,9 @@ import org.springframework.test.context.jdbc.Sql;
         "INSERT INTO t_submission VALUES (5,52,102,2,17,'java','x',3,90,'2026-07-10 10:50:00','2026-07-10 10:50:01',0)",
         "INSERT INTO t_submission VALUES (6,52,102,2,18,'java','x',3,90,'2026-07-10 10:40:00','2026-07-10 10:40:01',0)",
         "INSERT INTO t_submission VALUES (7,52,102,2,17,'java','x',1,100,'2026-07-10 11:10:00','2026-07-10 11:10:01',0)",
+        "INSERT INTO t_submission VALUES (8,52,102,2,17,'java','x',0,100,'2026-07-10 10:55:00','2026-07-10 10:55:01',0)",
+        "INSERT INTO t_submission VALUES (9,52,102,2,18,'java','x',99,100,'2026-07-10 10:56:00','2026-07-10 10:56:01',0)",
+        "INSERT INTO t_submission VALUES (10,52,102,2,18,'java','x',7,NULL,'2026-07-10 10:57:00','2026-07-10 10:57:01',0)",
         "INSERT INTO t_contest_clarification VALUES (10,1,42,7,'Is input sorted?','ANSWERED','2026-07-10 10:15:00')",
         "INSERT INTO t_contest_clarification_reply VALUES (20,10,'private details',9,FALSE,'2026-07-10 10:16:00')",
         "INSERT INTO t_contest_clarification_reply VALUES (21,10,'No.',9,TRUE,'2026-07-10 10:17:00')"
@@ -138,6 +141,13 @@ class ContestContentAndScoreboardIntegrationTest {
         assertEquals(2000, jdbc.queryForObject(
                         "SELECT YEAR(generated_at) FROM t_contest_scoreboard_snapshot WHERE contest_id=2",
                         Integer.class));
+        jdbc.update(
+                "UPDATE t_contest_scoreboard_snapshot SET payload='{\"maximumScore\":100}', generated_at='2000-01-01 00:00:00' WHERE contest_id=2");
+        var recoveredPublicBoard = scoreboards.publicScoreboard(2L, 17L);
+        assertEquals(2, recoveredPublicBoard.rows().size());
+        assertEquals(2026, jdbc.queryForObject(
+                        "SELECT YEAR(generated_at) FROM t_contest_scoreboard_snapshot WHERE contest_id=2",
+                        Integer.class));
 
         var adminBoard = scoreboards.administratorScoreboard(2L);
         assertEquals(17L, adminBoard.rows().get(0).userId());
@@ -146,51 +156,100 @@ class ContestContentAndScoreboardIntegrationTest {
     }
 
     @Test
+    void endedOiBoardUsesTheExclusiveContestEndAsItsStableFinalCutoff() {
+        ContestRepository repository = new ContestRepository(jdbc);
+        ContestScoreboardService scoreboards =
+                new ContestScoreboardService(repository, fixed("2026-07-10T12:30:00Z"));
+
+        var finalBoard = scoreboards.publicScoreboard(2L, null);
+
+        assertEquals(false, finalBoard.frozen());
+        assertEquals(Instant.parse("2026-07-10T12:00:00Z"), finalBoard.cutoffExclusive());
+        assertEquals(100, finalBoard.rows().get(0).totalScore());
+        assertEquals(7L, finalBoard.rows().get(0).problems().get(0).submissionId());
+    }
+
+    @Test
+    void privateOiBoardRequiresAnActiveRegistration() {
+        jdbc.update("UPDATE t_contest SET visibility='PRIVATE' WHERE id=2");
+        ContestScoreboardService scoreboards = new ContestScoreboardService(
+                new ContestRepository(jdbc), fixed("2026-07-10T11:30:00Z"));
+
+        assertThrows(ContestApiException.class, () -> scoreboards.publicScoreboard(2L, null));
+        assertEquals(2, scoreboards.publicScoreboard(2L, 17L).rows().size());
+    }
+
+    @Test
+    void softDeletingAnEffectiveOiSubmissionInvalidatesAndRebuildsTheBoard() {
+        ContestScoreboardService scoreboards = new ContestScoreboardService(
+                new ContestRepository(jdbc), fixed("2026-07-10T11:30:00Z"));
+        var before = scoreboards.publicScoreboard(2L, 17L);
+
+        jdbc.update("UPDATE t_submission SET is_deleted=1 WHERE id=6");
+
+        var after = scoreboards.publicScoreboard(2L, 17L);
+        assertNotEquals(before.sourceVersion(), after.sourceVersion());
+        assertEquals(
+                0,
+                after.rows().stream()
+                        .filter(row -> row.userId() == 18L)
+                        .findFirst()
+                        .orElseThrow()
+                        .totalScore());
+    }
+
+    @Test
     void oiScoreChangeInvalidatesStableSnapshotSourceVersion() {
         ContestRepository repository = new ContestRepository(jdbc);
-        Instant cutoff = Instant.parse("2026-07-10T11:00:00Z");
-        String before = repository.scoreboardSourceVersion(2L, cutoff);
+        ContestScoreboardService scoreboards =
+                new ContestScoreboardService(repository, fixed("2026-07-10T11:30:00Z"));
+        String before = scoreboards.publicScoreboard(2L, 17L).sourceVersion();
 
         jdbc.update("UPDATE t_submission SET score=95 WHERE id=5");
 
-        String after = repository.scoreboardSourceVersion(2L, cutoff);
+        String after = scoreboards.publicScoreboard(2L, 17L).sourceVersion();
         assertNotEquals(before, after);
     }
 
     @Test
     void participantRenameInvalidatesStableSnapshotSourceVersion() {
         ContestRepository repository = new ContestRepository(jdbc);
-        Instant cutoff = Instant.parse("2026-07-10T11:00:00Z");
-        String before = repository.scoreboardSourceVersion(2L, cutoff);
+        ContestScoreboardService scoreboards =
+                new ContestScoreboardService(repository, fixed("2026-07-10T11:30:00Z"));
+        String before = scoreboards.publicScoreboard(2L, 17L).sourceVersion();
 
         jdbc.update("UPDATE t_user SET username='renamed' WHERE id=18");
 
-        String after = repository.scoreboardSourceVersion(2L, cutoff);
+        String after = scoreboards.publicScoreboard(2L, 17L).sourceVersion();
         assertNotEquals(before, after);
     }
 
     @Test
     void sourceVersionCannotCollideWhenRegistrationStatusesAreSwapped() {
         ContestRepository repository = new ContestRepository(jdbc);
+        ContestScoreboardService scoreboards =
+                new ContestScoreboardService(repository, fixed("2026-07-10T11:30:00Z"));
         jdbc.update("INSERT INTO t_contest_registration(contest_id,user_id,status,updated_at) VALUES (1,9,'CANCELLED','2026-07-10 10:00:00')");
         jdbc.update("UPDATE t_contest_registration SET updated_at='2026-07-10 10:00:00' WHERE contest_id=1");
-        String before = repository.scoreboardSourceVersion(1L, Instant.parse("2026-07-10T11:00:00Z"));
+        String before = scoreboards.publicScoreboard(1L, 7L).sourceVersion();
 
         jdbc.update("UPDATE t_contest_registration SET status=CASE user_id WHEN 7 THEN 'CANCELLED' WHEN 9 THEN 'REGISTERED' ELSE status END WHERE contest_id=1 AND user_id IN (7,9)");
 
-        String after = repository.scoreboardSourceVersion(1L, Instant.parse("2026-07-10T11:00:00Z"));
+        String after = scoreboards.publicScoreboard(1L, 8L).sourceVersion();
         assertNotEquals(before, after);
     }
 
     @Test
     void sourceVersionCannotCollideWhenSubmissionStatusesAreSwapped() {
         ContestRepository repository = new ContestRepository(jdbc);
+        ContestScoreboardService scoreboards =
+                new ContestScoreboardService(repository, fixed("2026-07-10T11:30:00Z"));
         jdbc.update("UPDATE t_submission SET update_time='2026-07-10 10:40:00' WHERE contest_id=1");
-        String before = repository.scoreboardSourceVersion(1L, Instant.parse("2026-07-10T11:00:00Z"));
+        String before = scoreboards.publicScoreboard(1L, 7L).sourceVersion();
 
         jdbc.update("UPDATE t_submission SET status=CASE id WHEN 1 THEN 1 WHEN 2 THEN 3 ELSE status END WHERE id IN (1,2)");
 
-        String after = repository.scoreboardSourceVersion(1L, Instant.parse("2026-07-10T11:00:00Z"));
+        String after = scoreboards.publicScoreboard(1L, 7L).sourceVersion();
         assertNotEquals(before, after);
     }
 

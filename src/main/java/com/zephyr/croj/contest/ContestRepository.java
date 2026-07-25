@@ -5,12 +5,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
-import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.Optional;
 import java.util.Objects;
@@ -232,6 +227,52 @@ public class ContestRepository {
         return count != null && count == 1;
     }
 
+    public Optional<ContestProblemRule> findAvailableProblemVersionRule(
+            long problemId, long problemVersionId) {
+        return jdbc.query(
+                        """
+                        SELECT p.id AS problem_id,pv.id AS problem_version_id,
+                               pv.limits_json,pv.judge_config_json
+                        FROM t_problem p
+                        JOIN t_problem_version pv ON pv.problem_id=p.id
+                        JOIN t_test_bundle tb ON tb.problem_version_id=pv.id
+                        WHERE p.id=? AND pv.id=? AND pv.state='PUBLISHED' AND p.is_deleted=0
+                        """,
+                        (result, row) -> new ContestProblemRule(
+                                result.getLong("problem_id"),
+                                result.getLong("problem_version_id"),
+                                0,
+                                result.getString("limits_json"),
+                                result.getString("judge_config_json")),
+                        problemId,
+                        problemVersionId)
+                .stream()
+                .findFirst();
+    }
+
+    public List<ContestProblemRule> listContestProblemRules(long contestId) {
+        return jdbc.query(
+                """
+                SELECT cp.problem_id,cp.problem_version_id,cp.score,
+                       pv.limits_json,pv.judge_config_json
+                FROM t_contest_problem cp
+                JOIN t_problem p ON p.id=cp.problem_id AND p.is_deleted=0
+                JOIN t_problem_version pv
+                  ON pv.id=cp.problem_version_id AND pv.problem_id=cp.problem_id
+                 AND pv.state='PUBLISHED'
+                JOIN t_test_bundle tb ON tb.problem_version_id=pv.id
+                WHERE cp.contest_id=?
+                ORDER BY cp.label,cp.problem_id
+                """,
+                (result, row) -> new ContestProblemRule(
+                        result.getLong("problem_id"),
+                        result.getLong("problem_version_id"),
+                        result.getInt("score"),
+                        result.getString("limits_json"),
+                        result.getString("judge_config_json")),
+                contestId);
+    }
+
     public long addAnnouncement(long contestId, ContestRequests.Announcement request, long administratorId) {
         var keys = new GeneratedKeyHolder();
         jdbc.update(connection -> {
@@ -384,7 +425,9 @@ public class ContestRepository {
         return jdbc.query(
                 """
                 SELECT id,user_id,problem_id,status,create_time FROM t_submission
-                WHERE contest_id=? AND create_time<? AND is_deleted=0 ORDER BY create_time,id
+                WHERE contest_id=? AND create_time<? AND is_deleted=0
+                  AND status BETWEEN 1 AND 6
+                ORDER BY create_time,id
                 """,
                 (result, row) -> new AcmScoreboardCalculator.SubmissionFact(
                         result.getLong("id"),
@@ -401,7 +444,9 @@ public class ContestRepository {
         return jdbc.query(
                 """
                 SELECT id,user_id,problem_id,score,create_time FROM t_submission
-                WHERE contest_id=? AND create_time<? AND is_deleted=0 ORDER BY create_time,id
+                WHERE contest_id=? AND create_time<? AND is_deleted=0
+                  AND status BETWEEN 1 AND 6
+                ORDER BY create_time,id
                 """,
                 (result, row) -> new OiScoreboardCalculator.SubmissionFact(
                         result.getLong("id"),
@@ -411,82 +456,6 @@ public class ContestRepository {
                         result.getTimestamp("create_time").toInstant()),
                 contestId,
                 Timestamp.from(cutoffExclusive));
-    }
-
-    public String scoreboardSourceVersion(long contestId, Instant cutoffExclusive) {
-        MessageDigest digest = sha256();
-        digestField(digest, "contest-scoreboard-v3");
-        jdbc.query(
-                """
-                SELECT id,user_id,problem_id,status,score,create_time
-                FROM t_submission
-                WHERE contest_id=? AND create_time<? AND is_deleted=0
-                ORDER BY id
-                """,
-                (result, row) -> {
-                    digestField(digest, "submission");
-                    digestField(digest, result.getLong("id"));
-                    digestField(digest, result.getLong("user_id"));
-                    digestField(digest, result.getLong("problem_id"));
-                    digestField(digest, result.getInt("status"));
-                    digestField(digest, nullableInteger(result, "score"));
-                    digestField(digest, result.getTimestamp("create_time").toInstant().toEpochMilli());
-                    return null;
-                },
-                contestId,
-                Timestamp.from(cutoffExclusive));
-        jdbc.query(
-                """
-                SELECT registration.user_id,registration.status,participant_user.username
-                FROM t_contest_registration registration
-                LEFT JOIN t_user participant_user ON participant_user.id=registration.user_id
-                WHERE registration.contest_id=?
-                ORDER BY registration.user_id
-                """,
-                (result, row) -> {
-                    digestField(digest, "registration");
-                    digestField(digest, result.getLong("user_id"));
-                    digestField(digest, result.getString("status"));
-                    digestField(digest, result.getString("username"));
-                    return null;
-                },
-                contestId);
-        jdbc.query(
-                """
-                SELECT problem_id,problem_version_id,label,score
-                FROM t_contest_problem
-                WHERE contest_id=?
-                ORDER BY label,problem_id
-                """,
-                (result, row) -> {
-                    digestField(digest, "problem");
-                    digestField(digest, result.getLong("problem_id"));
-                    digestField(digest, result.getLong("problem_version_id"));
-                    digestField(digest, result.getString("label"));
-                    digestField(digest, result.getInt("score"));
-                    return null;
-                },
-                contestId);
-        return HexFormat.of().formatHex(digest.digest());
-    }
-
-    private MessageDigest sha256() {
-        try {
-            return MessageDigest.getInstance("SHA-256");
-        } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException("SHA-256 is unavailable", exception);
-        }
-    }
-
-    private void digestField(MessageDigest digest, Object value) {
-        if (value == null) {
-            digest.update((byte) 0);
-            return;
-        }
-        byte[] bytes = value.toString().getBytes(StandardCharsets.UTF_8);
-        digest.update((byte) 1);
-        digest.update(ByteBuffer.allocate(Integer.BYTES).putInt(bytes.length).array());
-        digest.update(bytes);
     }
 
     public Optional<String> findScoreboardSnapshot(
@@ -593,6 +562,12 @@ public class ContestRepository {
             int score,
             String statementJson,
             String limitsJson) {}
+    public record ContestProblemRule(
+            long problemId,
+            long problemVersionId,
+            int score,
+            String limitsJson,
+            String judgeConfigJson) {}
     public record Participant(long userId, String username) {}
     public record AnnouncementView(
             long id, String title, String contentMarkdown, long publishedBy, Instant publishedAt) {}

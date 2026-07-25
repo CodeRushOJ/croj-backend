@@ -28,9 +28,39 @@ class ContestAdminServiceTest {
     @Test
     void arrangementRejectsVersionThatIsNotPublishedForTheProblem() {
         when(repository.findByIdForUpdate(1L)).thenReturn(Optional.of(draftContest()));
-        when(repository.isAvailableProblemVersion(42L, 101L)).thenReturn(false);
+        when(repository.findAvailableProblemVersionRule(42L, 101L)).thenReturn(Optional.empty());
         var request = new ContestRequests.ProblemArrangement(
                 List.of(new ContestRequests.ProblemItem(42L, 101L, "A", 100)));
+
+        ContestApiException error = assertThrows(
+                ContestApiException.class, () -> service.arrangeProblems(1L, request));
+
+        assertEquals(HttpStatus.UNPROCESSABLE_ENTITY, error.getStatus());
+        verify(repository, never()).replaceProblems(1L, request.problems());
+    }
+
+    @Test
+    void oiArrangementRejectsAnAcmProblemVersion() {
+        when(repository.findByIdForUpdate(1L)).thenReturn(Optional.of(oiDraftContest()));
+        when(repository.findAvailableProblemVersionRule(42L, 101L))
+                .thenReturn(Optional.of(rule(42L, 101L, 100, 0, 100)));
+        var request = new ContestRequests.ProblemArrangement(
+                List.of(new ContestRequests.ProblemItem(42L, 101L, "A", 100)));
+
+        ContestApiException error = assertThrows(
+                ContestApiException.class, () -> service.arrangeProblems(1L, request));
+
+        assertEquals(HttpStatus.UNPROCESSABLE_ENTITY, error.getStatus());
+        verify(repository, never()).replaceProblems(1L, request.problems());
+    }
+
+    @Test
+    void oiArrangementRequiresPinnedProblemAndContestScoresToMatch() {
+        when(repository.findByIdForUpdate(1L)).thenReturn(Optional.of(oiDraftContest()));
+        when(repository.findAvailableProblemVersionRule(42L, 101L))
+                .thenReturn(Optional.of(rule(42L, 101L, 100, 1, 100)));
+        var request = new ContestRequests.ProblemArrangement(
+                List.of(new ContestRequests.ProblemItem(42L, 101L, "A", 80)));
 
         ContestApiException error = assertThrows(
                 ContestApiException.class, () -> service.arrangeProblems(1L, request));
@@ -68,12 +98,28 @@ class ContestAdminServiceTest {
     void publicationLocksTheContestAggregateBeforeChangingLifecycle() {
         when(repository.findByIdForUpdate(1L)).thenReturn(Optional.of(draftContest()));
         when(repository.problemCount(1L)).thenReturn(1);
+        when(repository.listContestProblemRules(1L))
+                .thenReturn(List.of(rule(42L, 101L, 100, 0, 100)));
         when(repository.transitionLifecycle(1L, "DRAFT", "PUBLISHED")).thenReturn(1);
 
         service.publish(1L);
 
         verify(repository).findByIdForUpdate(1L);
         verify(repository).transitionLifecycle(1L, "DRAFT", "PUBLISHED");
+    }
+
+    @Test
+    void publicationRevalidatesProblemsAfterTheDraftRuleChanges() {
+        when(repository.findByIdForUpdate(1L)).thenReturn(Optional.of(oiDraftContest()));
+        when(repository.problemCount(1L)).thenReturn(1);
+        when(repository.listContestProblemRules(1L))
+                .thenReturn(List.of(rule(42L, 101L, 100, 0, 100)));
+
+        ContestApiException error =
+                assertThrows(ContestApiException.class, () -> service.publish(1L));
+
+        assertEquals(HttpStatus.CONFLICT, error.getStatus());
+        verify(repository, never()).transitionLifecycle(1L, "DRAFT", "PUBLISHED");
     }
 
     @Test
@@ -96,11 +142,19 @@ class ContestAdminServiceTest {
     }
 
     private ContestRepository.ContestRecord draftContest() {
+        return draftContest("ACM");
+    }
+
+    private ContestRepository.ContestRecord oiDraftContest() {
+        return draftContest("OI");
+    }
+
+    private ContestRepository.ContestRecord draftContest(String ruleType) {
         return new ContestRepository.ContestRecord(
                 1L,
                 "Weekly",
                 "d",
-                "ACM",
+                ruleType,
                 "PUBLIC",
                 "DRAFT",
                 Instant.parse("2026-07-01T00:00:00Z"),
@@ -111,5 +165,19 @@ class ContestAdminServiceTest {
                 9L,
                 Instant.parse("2026-07-01T00:00:00Z"),
                 Instant.parse("2026-07-01T00:00:00Z"));
+    }
+
+    private ContestRepository.ContestProblemRule rule(
+            long problemId,
+            long problemVersionId,
+            int score,
+            int judgeMode,
+            int totalScore) {
+        return new ContestRepository.ContestProblemRule(
+                problemId,
+                problemVersionId,
+                score,
+                "{\"totalScore\":" + totalScore + "}",
+                "{\"judgeMode\":" + judgeMode + "}");
     }
 }

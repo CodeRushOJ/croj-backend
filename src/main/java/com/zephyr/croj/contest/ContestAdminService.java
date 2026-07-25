@@ -1,16 +1,30 @@
 package com.zephyr.croj.contest;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zephyr.croj.model.dto.contest.ContestRequests;
+import java.io.IOException;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Locale;
-import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
-@RequiredArgsConstructor
 public class ContestAdminService {
     private final ContestRepository contests;
+    private final ObjectMapper objectMapper;
+
+    @Autowired
+    public ContestAdminService(ContestRepository contests, ObjectMapper objectMapper) {
+        this.contests = contests;
+        this.objectMapper = objectMapper;
+    }
+
+    ContestAdminService(ContestRepository contests) {
+        this(contests, new ObjectMapper());
+    }
 
     @Transactional
     public long create(ContestRequests.Upsert request, long administratorId) {
@@ -43,10 +57,19 @@ public class ContestAdminService {
             throw ContestApiException.unprocessable("contest problem IDs and labels must be unique");
         }
         request.problems().forEach(problem -> {
-            if (!contests.isAvailableProblemVersion(problem.problemId(), problem.problemVersionId())) {
-                throw ContestApiException.unprocessable(
-                        "problemVersionId must be a published immutable version of problemId");
-            }
+            ContestRepository.ContestProblemRule pinned = contests
+                    .findAvailableProblemVersionRule(problem.problemId(), problem.problemVersionId())
+                    .orElseThrow(() -> ContestApiException.unprocessable(
+                            "problemVersionId must be a published immutable version of problemId"));
+            validateProblemRule(
+                    contest.ruleType(),
+                    new ContestRepository.ContestProblemRule(
+                            pinned.problemId(),
+                            pinned.problemVersionId(),
+                            problem.score(),
+                            pinned.limitsJson(),
+                            pinned.judgeConfigJson()),
+                    false);
         });
         contests.replaceProblems(contestId, request.problems());
     }
@@ -61,9 +84,17 @@ public class ContestAdminService {
                 contest.startsAt(),
                 contest.freezeAt(),
                 contest.endsAt());
-        if (contests.problemCount(contestId) == 0) {
+        int problemCount = contests.problemCount(contestId);
+        if (problemCount == 0) {
             throw ContestApiException.conflict("a contest requires at least one problem before publication");
         }
+        List<ContestRepository.ContestProblemRule> problemRules =
+                contests.listContestProblemRules(contestId);
+        if (problemRules.size() != problemCount) {
+            throw ContestApiException.conflict(
+                    "all contest problems must remain published with an attached test bundle");
+        }
+        problemRules.forEach(problem -> validateProblemRule(contest.ruleType(), problem, true));
         if (contests.transitionLifecycle(contestId, "DRAFT", "PUBLISHED") != 1) {
             throw ContestApiException.conflict("contest publication state changed concurrently");
         }
@@ -120,6 +151,43 @@ public class ContestAdminService {
         if (!visibility.equals("PUBLIC") && !visibility.equals("PRIVATE")) {
             throw ContestApiException.unprocessable("visibility must be PUBLIC or PRIVATE");
         }
+    }
+
+    private void validateProblemRule(
+            String contestRuleType,
+            ContestRepository.ContestProblemRule problem,
+            boolean publication) {
+        try {
+            JsonNode limits = objectMapper.readTree(problem.limitsJson());
+            JsonNode judgeConfig = objectMapper.readTree(problem.judgeConfigJson());
+            JsonNode judgeModeNode = judgeConfig.path("judgeMode");
+            JsonNode totalScoreNode = limits.path("totalScore");
+            if (!judgeModeNode.isIntegralNumber()
+                    || !totalScoreNode.isIntegralNumber()
+                    || totalScoreNode.intValue() <= 0) {
+                throw invalidProblemRule(publication);
+            }
+            int expectedMode = "OI".equals(contestRuleType) ? 1 : 0;
+            if (judgeModeNode.intValue() != expectedMode) {
+                throw invalidProblemRule(publication);
+            }
+            if (expectedMode == 1 && problem.score() != totalScoreNode.intValue()) {
+                throw invalidProblemRule(publication);
+            }
+        } catch (IOException | RuntimeException exception) {
+            if (exception instanceof ContestApiException contestApiException) {
+                throw contestApiException;
+            }
+            throw invalidProblemRule(publication);
+        }
+    }
+
+    private ContestApiException invalidProblemRule(boolean publication) {
+        String message =
+                "contest rule, immutable judgeMode, test-bundle totalScore, and arranged score must agree";
+        return publication
+                ? ContestApiException.conflict(message)
+                : ContestApiException.unprocessable(message);
     }
 
     private void validateSchedule(

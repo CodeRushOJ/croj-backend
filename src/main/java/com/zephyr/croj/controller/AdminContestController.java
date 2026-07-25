@@ -4,6 +4,7 @@ import com.zephyr.croj.common.response.Result;
 import com.zephyr.croj.contest.ContestAdminService;
 import com.zephyr.croj.contest.ContestScoreboardService;
 import com.zephyr.croj.model.dto.contest.ContestRequests;
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -85,6 +86,10 @@ public class AdminContestController {
     }
 
     @GetMapping("/{contestId}/scoreboard")
+    @Operation(
+            summary = "Read the live administrator contest scoreboard",
+            description =
+                    "Returns the live ACM or OI board without applying the public freeze. The exclusive cutoff is min(now, end). ACM-only and OI-only row fields are mutually exclusive and nullable.")
     public Result<ContestScoreboardService.ScoreboardView> scoreboard(@PathVariable long contestId) {
         return Result.success(scoreboards.administratorScoreboard(contestId));
     }

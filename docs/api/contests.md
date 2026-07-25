@@ -66,8 +66,8 @@ startsAt < freezeAt < endsAt       # freezeAt 可省略
 
 ACM 榜按已解题数降序、罚时升序、最后一次 AC 时间升序排序。每道题首次 AC 前的编译错误、答案错误、超时、内存超限和运行错误各罚 20 分钟；pending、系统错误、AC 后提交和非参赛者提交不计入榜单。全场 first AC 按提交时间和提交 ID 确定。
 
-OI 榜对每位参赛者、每道题取截止时刻前的历史最高分；相同最高分保留最早达到该分数的提交。单次分数必须在 `0..contest_problem.score` 内，否则榜单拒绝不一致的数据。排名依次比较总分降序、获得正分的题数降序、最后一次达到各题最高分的时间升序，最后以用户 ID 保证确定性。公开冻结榜不包含恰好发生在 `freezeAt` 或之后的提分，管理员榜继续实时显示。
+OI 榜对每位参赛者、每道题取截止时刻前的终态提交历史最高分；pending、未知状态和无分基础设施失败不计榜。相同最高分保留最早达到该分数的提交。单次分数必须在 `0..contest_problem.score` 内，否则榜单拒绝不一致的数据。编排和发布均要求 OI 题目的不可变 `judgeMode=1` 且比赛题目分值等于 TestBundle `totalScore`；ACM 则要求 `judgeMode=0`。排名依次比较总分降序、获得正分的题数降序、最后一次达到各题最高分的时间升序，最后以用户 ID 保证确定性。公开冻结榜不包含恰好发生在 `freezeAt` 或之后的提分，管理员榜继续实时显示。
 
 响应顶层总是包含 `ruleType`。每行只公开 `userId` 和当前 `username`，不包含邮箱等私有资料。ACM 行使用 `solved`、`penaltyMinutes` 和 `lastAcceptedAt`；OI 行使用 `totalScore`、`scoredProblems` 和 `lastImprovedAt`，顶层 `maximumScore` 是比赛各题固定分值之和。每道 OI 题同时返回 `maximumScore`、`score`、产生当前最高分的 `submissionId` 与 `achievedAt`。另一赛制不适用的字段为 `null`，客户端不得把 OI 分数伪装成 ACM 解题数。
 
-提交事实是唯一真相源。冻结榜和最终榜可以写入 `t_contest_scoreboard_snapshot` 作为可丢弃缓存；命中条件同时包含固定截止时间和由有效报名、未删除提交的状态与分数、固定题目版本及分值计算的 `sourceVersion`。版本不一致或 JSON 无法读取时直接重算。实时公开榜和管理员榜不缓存。
+提交事实是唯一真相源。冻结榜和最终榜可以写入 `t_contest_scoreboard_snapshot` 作为可丢弃缓存；命中条件同时包含固定截止时间和由同一次读取的有效报名、未删除终态提交、固定题目版本及分值计算的 `sourceVersion`。版本不一致，或 JSON 在结构、排名、赛制字段上不完整时直接重算。实时公开榜和管理员榜不缓存。

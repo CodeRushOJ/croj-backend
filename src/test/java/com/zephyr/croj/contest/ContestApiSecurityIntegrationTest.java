@@ -81,6 +81,23 @@ class ContestApiSecurityIntegrationTest {
     }
 
     @Test
+    void generatedOpenApiDocumentsScoringSortFreezeAndFieldFamilies() throws Exception {
+        mvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath(
+                                "$.paths['/v1/contests/{contestId}/scoreboard'].get.description")
+                        .value(org.hamcrest.Matchers.allOf(
+                                org.hamcrest.Matchers.containsString("ACM rows sort"),
+                                org.hamcrest.Matchers.containsString("OI rows sort"),
+                                org.hamcrest.Matchers.containsString("[start, freeze)"),
+                                org.hamcrest.Matchers.containsString("mutually exclusive"))))
+                .andExpect(jsonPath(
+                                "$.paths['/v1/admin/contests/{contestId}/scoreboard'].get.description")
+                        .value(org.hamcrest.Matchers.containsString(
+                                "without applying the public freeze")));
+    }
+
+    @Test
     void registrationRequiresLogin() throws Exception {
         mvc.perform(post("/v1/contests/1/registrations"))
                 .andExpect(status().isUnauthorized());

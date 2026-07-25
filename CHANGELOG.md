@@ -60,7 +60,9 @@
 
 ### Changed
 
-- ACM/OI 榜单统一返回带 `ruleType` 的稳定结构；快照 source version 升级为 v3，纳入 OI 分数、题目固定分值和软删除状态，分数变化会使冻结缓存立即失效。
+- ACM/OI 榜单统一返回带 `ruleType` 的稳定结构；快照 source version 升级为 v4，由同一次有效报名、固定题目和终态提交事实读取生成，避免实时榜重复扫描；分数、用户名、报名和软删除变化会使冻结缓存立即失效。
+- 比赛编排及发布现在严格校验 ACM/OI 与不可变题目 `judgeMode`，并要求 OI 比赛分值等于 TestBundle `totalScore`；非终态、未知状态及无分基础设施失败不会进入榜单。
+- OpenAPI 明确记录 ACM/OI 排序、冻结区间、公开/管理员视图以及互斥字段语义；损坏或语义不完整的快照会自动丢弃并重建。
 - `prod` Profile 的 graceful shutdown phase timeout 固定为 30 秒，并将 multipart 临时目录与上传目录分别对齐 `/tmp`、`/app/uploads`。
 - 生产镜像工作流先在 Java 17 中运行完整 Maven 测试，测试失败时上传 Surefire 报告，镜像构建必须等待测试通过。
 - 经过 GitHub 验证的 `vX.Y.Z` 签名 tag 在全部门禁通过后发布 GHCR 双架构版本/commit 镜像；普通分支只保留短期 attested OCI artifact，不发布 `latest`。

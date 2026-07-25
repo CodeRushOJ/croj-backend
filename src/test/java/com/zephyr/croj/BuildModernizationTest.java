@@ -59,6 +59,9 @@ class BuildModernizationTest {
         assertTrue(workflow.contains("docker/login-action@"));
         assertTrue(workflow.contains("github.ref_type == 'tag'"));
         assertTrue(workflow.contains(
+                "Check out the complete tag history\n"
+                        + "        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3"));
+        assertTrue(workflow.contains(
                 "test \"$(git rev-parse \"$GITHUB_REF_NAME^{commit}\")\" = \"$GITHUB_SHA\""));
         assertTrue(workflow.contains("git fetch --no-tags origin main"));
         assertTrue(workflow.contains("test \"$GITHUB_SHA\" = \"$(git rev-parse origin/main)\""));

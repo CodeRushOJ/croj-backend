@@ -1,5 +1,6 @@
 package com.zephyr.croj.config;
 
+import com.zephyr.croj.config.properties.CorsProperties;
 import com.zephyr.croj.security.JwtAccessDeniedHandler;
 import com.zephyr.croj.security.JwtAuthenticationEntryPoint;
 import com.zephyr.croj.security.JwtAuthenticationFilter;
@@ -9,9 +10,10 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
-import org.springframework.security.config.annotation.method.configuration.EnableGlobalMethodSecurity;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -21,7 +23,6 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
-import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -29,13 +30,14 @@ import java.util.List;
  */
 @Configuration
 @EnableWebSecurity
-@EnableGlobalMethodSecurity(prePostEnabled = true)
+@EnableMethodSecurity
 @RequiredArgsConstructor
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
     private final JwtAccessDeniedHandler jwtAccessDeniedHandler;
+    private final CorsProperties corsProperties;
 
     /**
      * 密码编码器
@@ -61,11 +63,11 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(List.of("http://localhost:3000"));
+        configuration.setAllowedOrigins(corsProperties.allowedOrigins());
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Requested-With"));
         configuration.setExposedHeaders(List.of("Authorization", "Captcha-Key")); // 添加 Captcha-Key
-        configuration.setAllowCredentials(true);
+        configuration.setAllowCredentials(corsProperties.allowCredentials());
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
@@ -78,50 +80,33 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
-                // Enable CORS and disable CSRF
-                .cors().configurationSource(corsConfigurationSource())
-                .and()
-                .csrf().disable()
-                // 异常处理
-                .exceptionHandling()
-                .authenticationEntryPoint(jwtAuthenticationEntryPoint)
-                .accessDeniedHandler(jwtAccessDeniedHandler)
-                .and()
-                // 使用无状态会话，不需要session
-                .sessionManagement()
-                .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
-                .and()
-                // 请求授权规则
-                .authorizeRequests()
-                // 允许所有人访问公共资源 (Swagger)
-                .antMatchers(
-                        "/swagger-ui.html",
-                        "/swagger-ui/**",
-                        "/swagger-ui/index.html",
-                        "/swagger-ui/swagger-ui.css",
-                        "/swagger-ui/swagger-ui-bundle.js",
-                        "/swagger-ui/swagger-ui-standalone-preset.js",
-                        "/v3/api-docs/**",
-                        "/v3/api-docs.yaml",
-                        "/swagger-resources/**",
-                        "/webjars/**"
-                ).permitAll()
-                // 允许所有人访问上传的文件资源
-                .antMatchers("/uploads/**").permitAll()
-                // 允许所有人访问公开API
-                .antMatchers(
-                        "/user/register",
-                        "/user/login",
-                        "/user/check/username/**",
-                        "/user/check/email/**",
-                        "/captcha/**",
-                        "/email/code"
-                ).permitAll()
-                // OPTIONS 请求放行
-                .antMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                // 其他所有请求需要认证
-                // 具体的角色权限控制交给 @PreAuthorize 注解
-                .anyRequest().authenticated();
+                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+                .csrf(AbstractHttpConfigurer::disable)
+                .exceptionHandling(exceptions -> exceptions
+                        .authenticationEntryPoint(jwtAuthenticationEntryPoint)
+                        .accessDeniedHandler(jwtAccessDeniedHandler))
+                .sessionManagement(session -> session
+                        .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .authorizeHttpRequests(authorize -> authorize
+                        .requestMatchers(
+                                "/swagger-ui.html",
+                                "/swagger-ui/**",
+                                "/v3/api-docs/**",
+                                "/v3/api-docs.yaml",
+                                "/swagger-resources/**",
+                                "/webjars/**"
+                        ).permitAll()
+                        .requestMatchers("/uploads/**").permitAll()
+                        .requestMatchers(
+                                "/user/register",
+                                "/user/login",
+                                "/user/check/username/**",
+                                "/user/check/email/**",
+                                "/captcha/**",
+                                "/email/code"
+                        ).permitAll()
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                        .anyRequest().authenticated());
 
         // 添加JWT过滤器
         http.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);

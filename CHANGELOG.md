@@ -69,6 +69,7 @@
 
 ### Changed
 
+- Release job 使用能按 peeled commit 比较 annotated tag 的固定 checkout 版本，避免 runner 本地 tag ref 被错误覆盖成轻量标签。
 - ACM/OI 榜单统一返回带 `ruleType` 的稳定结构；快照 source version 升级为 v4，由同一次有效报名、固定题目和终态提交事实读取生成，避免实时榜重复扫描；分数、用户名、报名和软删除变化会使冻结缓存立即失效。
 - 比赛编排及发布现在严格校验 ACM/OI 与不可变题目 `judgeMode`，并要求 OI 比赛分值等于 TestBundle `totalScore`；非终态、未知状态及无分基础设施失败不会进入榜单。
 - OpenAPI 明确记录 ACM/OI 排序、冻结区间、公开/管理员视图以及互斥字段语义；损坏或语义不完整的快照会自动丢弃并重建。

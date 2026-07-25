@@ -14,6 +14,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
         "spring.data.redis.password=test-only",
         "spring.mail.password=test-only",
         "jwt.secret=test-only-secret-with-at-least-32-bytes",
+        "app.judge-result.service-token=judge-result-test-token-with-32-bytes",
         "app.upload.base-dir=target/test-uploads",
         "app.outbox.enabled=false",
 })

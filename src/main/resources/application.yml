@@ -50,8 +50,8 @@ spring:
   servlet:
     multipart:
       enabled: true
-      max-file-size: 5MB
-      max-request-size: 10MB
+      max-file-size: ${IMPORT_MAX_FILE_SIZE:256MB}
+      max-request-size: ${IMPORT_MAX_REQUEST_SIZE:260MB}
       file-size-threshold: 2KB
 
 mybatis-plus:
@@ -102,6 +102,16 @@ springdoc:
 
 # File storage configuration
 app:
+  test-bundle:
+    enabled: ${TEST_BUNDLE_STORAGE_ENABLED:false}
+    bucket: ${TEST_BUNDLE_S3_BUCKET:coderushoj-test-bundles}
+    region: ${AWS_REGION:us-east-1}
+    endpoint: ${TEST_BUNDLE_S3_ENDPOINT:}
+    path-style: ${TEST_BUNDLE_S3_PATH_STYLE:true}
+    max-archive-bytes: ${TEST_BUNDLE_MAX_ARCHIVE_BYTES:268435456}
+    max-uncompressed-bytes: ${TEST_BUNDLE_MAX_UNCOMPRESSED_BYTES:1073741824}
+    max-cases: ${TEST_BUNDLE_MAX_CASES:10000}
+    max-compression-ratio: ${TEST_BUNDLE_MAX_COMPRESSION_RATIO:100}
   outbox:
     enabled: ${OUTBOX_ENABLED:true}
     submission-topic: ${SUBMISSION_TOPIC:submission-topic}

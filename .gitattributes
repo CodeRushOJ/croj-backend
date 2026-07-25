@@ -1,2 +1,4 @@
 /mvnw text eol=lf
 *.cmd text eol=crlf
+/src/test/resources/problem-import/freeproblemset/fps-zhblue-A+B.xml -whitespace
+/src/test/resources/problem-import/freeproblemset/LICENSE.LGPL-3.0.txt -whitespace

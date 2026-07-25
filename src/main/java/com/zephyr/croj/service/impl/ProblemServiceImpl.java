@@ -8,10 +8,12 @@ import com.zephyr.croj.common.enums.ResultCodeEnum;
 import com.zephyr.croj.common.enums.UserRoleEnum;
 import com.zephyr.croj.common.exception.BusinessException;
 import com.zephyr.croj.mapper.ProblemMapper;
+import com.zephyr.croj.mapper.ProblemVersionMapper;
 import com.zephyr.croj.model.dto.ProblemCreateDTO;
 import com.zephyr.croj.model.dto.ProblemQueryDTO;
 import com.zephyr.croj.model.dto.ProblemUpdateDTO;
 import com.zephyr.croj.model.entity.Problem;
+import com.zephyr.croj.model.entity.ProblemVersion;
 import com.zephyr.croj.model.entity.User;
 import com.zephyr.croj.model.vo.ProblemListItemVO;
 import com.zephyr.croj.model.vo.ProblemTagVO;
@@ -19,6 +21,8 @@ import com.zephyr.croj.model.vo.ProblemVO;
 import com.zephyr.croj.service.ProblemService;
 import com.zephyr.croj.service.ProblemTagService;
 import com.zephyr.croj.service.UserService;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
@@ -26,6 +30,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -40,6 +46,8 @@ public class ProblemServiceImpl extends ServiceImpl<ProblemMapper, Problem> impl
 
     private final ProblemTagService problemTagService;
     private final UserService userService;
+    private final ProblemVersionMapper problemVersions;
+    private final ObjectMapper objectMapper;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -80,6 +88,8 @@ public class ProblemServiceImpl extends ServiceImpl<ProblemMapper, Problem> impl
             throw new BusinessException(ResultCodeEnum.CREATE_ERROR);
         }
 
+        publishVersionSnapshot(problem, userId, 1);
+
         // 保存标签关联
         if (dto.getTagIds() != null && !dto.getTagIds().isEmpty()) {
             problemTagService.saveProblemTags(problem.getId(), dto.getTagIds());
@@ -114,6 +124,9 @@ public class ProblemServiceImpl extends ServiceImpl<ProblemMapper, Problem> impl
         if (!updated) {
             throw new BusinessException(ResultCodeEnum.UPDATE_ERROR);
         }
+
+        publishVersionSnapshot(problem, userId,
+                problemVersions.findLatestVersionNumber(problem.getId()) + 1);
 
         // 更新标签关联
         if (dto.getTagIds() != null) {
@@ -354,5 +367,65 @@ public class ProblemServiceImpl extends ServiceImpl<ProblemMapper, Problem> impl
         }
 
         return "P" + nextNumber;
+    }
+
+    private void publishVersionSnapshot(Problem problem, Long actorId, int versionNo) {
+        LocalDateTime now = LocalDateTime.now();
+        boolean published = Integer.valueOf(0).equals(problem.getStatus());
+        ProblemVersion version = new ProblemVersion();
+        version.setProblemId(problem.getId());
+        version.setVersionNo(versionNo);
+        version.setState(published ? "PUBLISHED" : "DRAFT");
+        version.setStatementJson(toJson(statementSnapshot(problem)));
+        version.setLimitsJson(toJson(limitsSnapshot(problem)));
+        version.setJudgeConfigJson(toJson(judgeSnapshot(problem)));
+        version.setCreatedBy(actorId);
+        version.setCreatedAt(now);
+        version.setPublishedAt(published ? now : null);
+        if (problemVersions.insert(version) != 1) {
+            throw new BusinessException(ResultCodeEnum.CREATE_ERROR);
+        }
+        if (published) {
+            problem.setPublishedVersionId(version.getId());
+            if (!updateById(problem)) {
+                throw new BusinessException(ResultCodeEnum.UPDATE_ERROR);
+            }
+        }
+    }
+
+    private Map<String, Object> statementSnapshot(Problem problem) {
+        Map<String, Object> snapshot = new LinkedHashMap<>();
+        snapshot.put("title", problem.getTitle());
+        snapshot.put("description", problem.getDescription());
+        snapshot.put("inputDescription", problem.getInputDescription());
+        snapshot.put("outputDescription", problem.getOutputDescription());
+        snapshot.put("hints", problem.getHints());
+        snapshot.put("samples", problem.getSamples());
+        return snapshot;
+    }
+
+    private Map<String, Object> limitsSnapshot(Problem problem) {
+        Map<String, Object> snapshot = new LinkedHashMap<>();
+        snapshot.put("timeLimit", problem.getTimeLimit());
+        snapshot.put("memoryLimit", problem.getMemoryLimit());
+        snapshot.put("totalScore", problem.getTotalScore());
+        return snapshot;
+    }
+
+    private Map<String, Object> judgeSnapshot(Problem problem) {
+        Map<String, Object> snapshot = new LinkedHashMap<>();
+        snapshot.put("specialJudge", problem.getIsSpecialJudge());
+        snapshot.put("specialJudgeCode", problem.getSpecialJudgeCode());
+        snapshot.put("specialJudgeLanguage", problem.getSpecialJudgeLanguage());
+        snapshot.put("judgeMode", problem.getJudgeMode());
+        return snapshot;
+    }
+
+    private String toJson(Map<String, Object> value) {
+        try {
+            return objectMapper.writeValueAsString(value);
+        } catch (JsonProcessingException exception) {
+            throw new BusinessException(ResultCodeEnum.SYSTEM_ERROR);
+        }
     }
 }

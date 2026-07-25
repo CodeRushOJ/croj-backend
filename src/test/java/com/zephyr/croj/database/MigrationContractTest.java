@@ -14,6 +14,8 @@ class MigrationContractTest {
             "src", "main", "resources", "db", "migration", "V1__oj_schema.sql");
     private static final Path OUTBOX_CLAIMS = Path.of(
             "src", "main", "resources", "db", "migration", "V2__add_outbox_claims.sql");
+    private static final Path COMMUNITY_CONTENT = Path.of(
+            "src", "main", "resources", "db", "migration", "V3__community_content_api.sql");
 
     @Test
     void cleanSchemaCoversTheCompleteFreeOjDomain() throws IOException {
@@ -45,5 +47,18 @@ class MigrationContractTest {
         assertTrue(sql.contains("`claimed_by`"));
         assertTrue(sql.contains("`claimed_at`"));
         assertTrue(sql.contains("alter table `t_outbox_event`"));
+    }
+
+    @Test
+    void communityContentEvolutionUsesANewForwardOnlyMigration() throws IOException {
+        assertTrue(Files.isRegularFile(COMMUNITY_CONTENT));
+        String sql = Files.readString(COMMUNITY_CONTENT).toLowerCase();
+        assertTrue(sql.contains("alter table `t_forum_comment`"));
+        assertTrue(sql.contains("alter table `t_solution`"));
+        assertTrue(sql.contains("updated_at"));
+        assertTrue(sql.contains("idx_forum_post_public_feed"));
+        assertTrue(sql.contains("insert into `t_problem_version`"));
+        assertTrue(sql.contains("update `t_problem`"));
+        assertTrue(sql.contains("`published_version_id`"));
     }
 }

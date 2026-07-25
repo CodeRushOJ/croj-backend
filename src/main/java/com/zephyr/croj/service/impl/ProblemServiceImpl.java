@@ -15,9 +15,11 @@ import com.zephyr.croj.model.dto.ProblemUpdateDTO;
 import com.zephyr.croj.model.entity.Problem;
 import com.zephyr.croj.model.entity.ProblemVersion;
 import com.zephyr.croj.model.entity.User;
+import com.zephyr.croj.model.projection.ProblemTagProjection;
 import com.zephyr.croj.model.vo.ProblemListItemVO;
 import com.zephyr.croj.model.vo.ProblemTagVO;
 import com.zephyr.croj.model.vo.ProblemVO;
+import com.zephyr.croj.problem.ProblemVersionProjectionContract;
 import com.zephyr.croj.service.ProblemService;
 import com.zephyr.croj.service.ProblemTagService;
 import com.zephyr.croj.service.UserService;
@@ -28,15 +30,19 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
+import org.springframework.beans.BeanWrapper;
+import org.springframework.beans.BeanWrapperImpl;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.time.LocalDateTime;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -66,10 +72,11 @@ public class ProblemServiceImpl extends ServiceImpl<ProblemMapper, Problem> impl
                 && !UserRoleEnum.SUPER_ADMIN.getCode().equals(user.getRole())) {
             throw new BusinessException(ResultCodeEnum.FORBIDDEN);
         }
+        List<Long> requestedTagIds = validatedRequestedTagIds(dto.getTagIds(), false);
 
         // 创建问题实体
         Problem problem = new Problem();
-        BeanUtils.copyProperties(dto, problem);
+        BeanUtils.copyProperties(dto, problem, nullPropertyNames(dto));
 
         // 新题先进入私有草稿；绑定隐藏测试包后再通过发布门禁公开。
         problem.setStatus(1);
@@ -95,12 +102,13 @@ public class ProblemServiceImpl extends ServiceImpl<ProblemMapper, Problem> impl
             throw new BusinessException(ResultCodeEnum.CREATE_ERROR);
         }
 
-        publishVersionSnapshot(problem, userId, 1);
-
         // 保存标签关联
-        if (dto.getTagIds() != null && !dto.getTagIds().isEmpty()) {
-            problemTagService.saveProblemTags(problem.getId(), dto.getTagIds());
+        if (!requestedTagIds.isEmpty()
+                && !problemTagService.saveProblemTags(problem.getId(), requestedTagIds)) {
+            throw invalidProblemTags();
         }
+
+        publishVersionSnapshot(problem, userId, 1, requestedTagIds);
 
         return problem.getId();
     }
@@ -118,12 +126,13 @@ public class ProblemServiceImpl extends ServiceImpl<ProblemMapper, Problem> impl
         if (!canEdit(problem, userId)) {
             throw new BusinessException(ResultCodeEnum.FORBIDDEN);
         }
+        List<Long> requestedTagIds = validatedRequestedTagIds(dto.getTagIds(), true);
 
         Integer stableStatus = problem.getStatus();
         Long stablePublishedVersionId = problem.getPublishedVersionId();
 
         // 更新问题
-        BeanUtils.copyProperties(dto, problem);
+        BeanUtils.copyProperties(dto, problem, nullPropertyNames(dto));
 
         // 编辑产生新的草稿版本；已有稳定版本继续对外，直到新版本原子发布。
         if (stablePublishedVersionId == null) {
@@ -144,16 +153,18 @@ public class ProblemServiceImpl extends ServiceImpl<ProblemMapper, Problem> impl
             throw new BusinessException(ResultCodeEnum.UPDATE_ERROR);
         }
 
-        publishVersionSnapshot(problem, userId,
-                problemVersions.findLatestVersionNumber(problem.getId()) + 1);
-
         // 更新标签关联
-        if (dto.getTagIds() != null) {
+        if (requestedTagIds != null) {
             problemTagService.deleteProblemTags(problem.getId());
-            if (!dto.getTagIds().isEmpty()) {
-                problemTagService.saveProblemTags(problem.getId(), dto.getTagIds());
+            if (!requestedTagIds.isEmpty()
+                    && !problemTagService.saveProblemTags(problem.getId(), requestedTagIds)) {
+                throw invalidProblemTags();
             }
         }
+
+        publishVersionSnapshot(problem, userId,
+                problemVersions.findLatestVersionNumber(problem.getId()) + 1,
+                requestedTagIds);
 
         return true;
     }
@@ -200,13 +211,14 @@ public class ProblemServiceImpl extends ServiceImpl<ProblemMapper, Problem> impl
 
         // 转换为VO
         ProblemVO vo = convertToVO(problem);
+        boolean publishedProjection = problem.getPublishedVersionId() != null && !canEdit;
         if (problem.getPublishedVersionId() != null && !canEdit) {
             applyPublishedSnapshot(vo, problemVersions.selectById(problem.getPublishedVersionId()));
         }
 
-        // 获取标签
-        List<ProblemTagVO> tags = problemTagService.getTagsByProblemId(id);
-        vo.setTags(tags);
+        if (!publishedProjection) {
+            vo.setTags(problemTagService.getTagsByProblemId(id));
+        }
 
         // 获取用户提交状态
         vo.setUserStatus(getUserSubmitStatus(id, userId));
@@ -230,13 +242,14 @@ public class ProblemServiceImpl extends ServiceImpl<ProblemMapper, Problem> impl
 
         // 转换为VO
         ProblemVO vo = convertToVO(problem);
+        boolean publishedProjection = problem.getPublishedVersionId() != null && !canEdit;
         if (problem.getPublishedVersionId() != null && !canEdit) {
             applyPublishedSnapshot(vo, problemVersions.selectById(problem.getPublishedVersionId()));
         }
 
-        // 获取标签
-        List<ProblemTagVO> tags = problemTagService.getTagsByProblemId(problem.getId());
-        vo.setTags(tags);
+        if (!publishedProjection) {
+            vo.setTags(problemTagService.getTagsByProblemId(problem.getId()));
+        }
 
         // 获取用户提交状态
         vo.setUserStatus(getUserSubmitStatus(problem.getId(), userId));
@@ -268,14 +281,16 @@ public class ProblemServiceImpl extends ServiceImpl<ProblemMapper, Problem> impl
                 .collect(Collectors.toList());
 
         // 批量获取标签
-        List<ProblemTagVO> allTags = new ArrayList<>();
+        List<ProblemTagProjection> allTags = new ArrayList<>();
         if (!problemIds.isEmpty()) {
             allTags = problemTagService.getTagsByProblemIds(problemIds);
         }
 
         // 标签按问题ID分组
         Map<Long, List<ProblemTagVO>> tagMap = allTags.stream()
-                .collect(Collectors.groupingBy(ProblemTagVO::getId));
+                .collect(Collectors.groupingBy(
+                        ProblemTagProjection::problemId,
+                        Collectors.mapping(this::toTagView, Collectors.toList())));
 
         // 转换为列表项VO
         List<ProblemListItemVO> records = problemPage.getRecords().stream()
@@ -297,7 +312,9 @@ public class ProblemServiceImpl extends ServiceImpl<ProblemMapper, Problem> impl
                     itemVO.setAcceptRate(acceptRate);
 
                     // 设置标签
-                    itemVO.setTags(tagMap.getOrDefault(problem.getId(), new ArrayList<>()));
+                    itemVO.setTags(problem.getTags() == null
+                            ? tagMap.getOrDefault(problem.getId(), new ArrayList<>())
+                            : problem.getTags());
 
                     // 设置用户提交状态
                     itemVO.setUserStatus(problem.getUserStatus());
@@ -408,10 +425,13 @@ public class ProblemServiceImpl extends ServiceImpl<ProblemMapper, Problem> impl
     }
 
     private void applyPublishedSnapshot(ProblemVO view, ProblemVersion version) {
-        if (version == null || !"PUBLISHED".equals(version.getState())) {
+        if (version == null
+                || !"PUBLISHED".equals(version.getState())
+                || !Boolean.TRUE.equals(version.getProjectionComplete())) {
             throw new BusinessException(ResultCodeEnum.SYSTEM_ERROR);
         }
         try {
+            new ProblemVersionProjectionContract(objectMapper).assertComplete(version);
             JsonNode statement = objectMapper.readTree(version.getStatementJson());
             JsonNode limits = objectMapper.readTree(version.getLimitsJson());
             JsonNode judge = objectMapper.readTree(version.getJudgeConfigJson());
@@ -425,21 +445,21 @@ public class ProblemServiceImpl extends ServiceImpl<ProblemMapper, Problem> impl
                     statement.path("samples"), new TypeReference<List<Map<String, String>>>() {}));
             JsonNode source = statement.get("source");
             view.setSource(source == null || source.isNull() ? null : source.textValue());
+            view.setTags(requiredTags(statement));
             view.setTimeLimit(requiredInt(limits, "timeLimit"));
             view.setMemoryLimit(requiredInt(limits, "memoryLimit"));
             JsonNode totalScore = limits.get("totalScore");
             view.setTotalScore(totalScore == null || totalScore.isNull() ? null : totalScore.intValue());
             view.setIsSpecialJudge(judge.path("specialJudge").booleanValue());
-            JsonNode specialJudgeCode = judge.get("specialJudgeCode");
-            view.setSpecialJudgeCode(
-                    specialJudgeCode == null || specialJudgeCode.isNull() ? null : specialJudgeCode.textValue());
             JsonNode specialJudgeLanguage = judge.get("specialJudgeLanguage");
             view.setSpecialJudgeLanguage(specialJudgeLanguage == null || specialJudgeLanguage.isNull()
                     ? null
                     : specialJudgeLanguage.textValue());
             view.setJudgeMode(requiredInt(judge, "judgeMode"));
             view.setDifficulty(requiredInt(judge, "difficulty"));
-        } catch (JsonProcessingException | IllegalArgumentException exception) {
+        } catch (JsonProcessingException
+                | IllegalArgumentException
+                | ProblemVersionProjectionContract.ContractViolation exception) {
             throw new BusinessException(ResultCodeEnum.SYSTEM_ERROR);
         }
     }
@@ -458,6 +478,36 @@ public class ProblemServiceImpl extends ServiceImpl<ProblemMapper, Problem> impl
             throw new IllegalArgumentException("published problem snapshot is incomplete");
         }
         return value.intValue();
+    }
+
+    private List<ProblemTagVO> requiredTags(JsonNode statement) {
+        JsonNode tags = statement == null ? null : statement.get("tags");
+        if (tags == null || !tags.isArray()) {
+            throw new IllegalArgumentException("published problem snapshot is incomplete");
+        }
+        List<ProblemTagVO> result = new ArrayList<>();
+        for (JsonNode tag : tags) {
+            JsonNode id = tag == null ? null : tag.get("id");
+            JsonNode name = tag == null ? null : tag.get("name");
+            JsonNode color = tag == null ? null : tag.get("color");
+            if (tag == null
+                    || !tag.isObject()
+                    || id == null
+                    || !id.isIntegralNumber()
+                    || !id.canConvertToLong()
+                    || name == null
+                    || !name.isTextual()
+                    || color == null
+                    || !color.isTextual()) {
+                throw new IllegalArgumentException("published problem snapshot is incomplete");
+            }
+            ProblemTagVO view = new ProblemTagVO();
+            view.setId(id.longValue());
+            view.setName(name.textValue());
+            view.setColor(color.textValue());
+            result.add(view);
+        }
+        return List.copyOf(result);
     }
 
     /**
@@ -485,24 +535,34 @@ public class ProblemServiceImpl extends ServiceImpl<ProblemMapper, Problem> impl
         return "P" + nextNumber;
     }
 
-    private void publishVersionSnapshot(Problem problem, Long actorId, int versionNo) {
+    private void publishVersionSnapshot(
+            Problem problem, Long actorId, int versionNo, List<Long> requestedTagIds) {
         LocalDateTime now = LocalDateTime.now();
         ProblemVersion version = new ProblemVersion();
         version.setProblemId(problem.getId());
         version.setVersionNo(versionNo);
         version.setState("DRAFT");
-        version.setStatementJson(toJson(statementSnapshot(problem)));
+        version.setStatementJson(toJson(statementSnapshot(problem, requestedTagIds)));
         version.setLimitsJson(toJson(limitsSnapshot(problem)));
         version.setJudgeConfigJson(toJson(judgeSnapshot(problem)));
         version.setCreatedBy(actorId);
         version.setCreatedAt(now);
         version.setPublishedAt(null);
+        try {
+            new ProblemVersionProjectionContract(objectMapper).assertComplete(version);
+            version.setProjectionComplete(true);
+        } catch (ProblemVersionProjectionContract.ContractViolation exception) {
+            throw new BusinessException(
+                    ResultCodeEnum.PARAM_ERROR.getCode(),
+                    "problem public projection is incomplete: " + exception.getMessage());
+        }
         if (problemVersions.insert(version) != 1) {
             throw new BusinessException(ResultCodeEnum.CREATE_ERROR);
         }
     }
 
-    private Map<String, Object> statementSnapshot(Problem problem) {
+    private Map<String, Object> statementSnapshot(
+            Problem problem, List<Long> requestedTagIds) {
         Map<String, Object> snapshot = new LinkedHashMap<>();
         snapshot.put("title", problem.getTitle());
         snapshot.put("description", problem.getDescription());
@@ -511,7 +571,52 @@ public class ProblemServiceImpl extends ServiceImpl<ProblemMapper, Problem> impl
         snapshot.put("hints", problem.getHints());
         snapshot.put("samples", problem.getSamples());
         snapshot.put("source", problem.getSource());
+        List<ProblemTagVO> tags = problemTagService.getTagsByProblemId(problem.getId());
+        List<ProblemTagVO> immutableTags = tags == null ? List.of() : List.copyOf(tags);
+        assertCompleteTagProjection(requestedTagIds, immutableTags);
+        snapshot.put("tags", immutableTags);
         return snapshot;
+    }
+
+    private List<Long> validatedRequestedTagIds(List<Long> tagIds, boolean nullMeansUnchanged) {
+        if (tagIds == null) {
+            return nullMeansUnchanged ? null : List.of();
+        }
+        Set<Long> unique = new HashSet<>();
+        for (Long tagId : tagIds) {
+            if (tagId == null || tagId <= 0 || !unique.add(tagId)) {
+                throw invalidProblemTags();
+            }
+        }
+        return List.copyOf(tagIds);
+    }
+
+    private void assertCompleteTagProjection(
+            List<Long> requestedTagIds, List<ProblemTagVO> tags) {
+        Set<Long> actual = new HashSet<>();
+        for (ProblemTagVO tag : tags) {
+            if (tag == null
+                    || tag.getId() == null
+                    || tag.getId() <= 0
+                    || tag.getName() == null
+                    || tag.getName().isBlank()
+                    || tag.getColor() == null
+                    || tag.getColor().isBlank()
+                    || !actual.add(tag.getId())) {
+                throw new BusinessException(ResultCodeEnum.SYSTEM_ERROR);
+            }
+        }
+        if (requestedTagIds != null
+                && (actual.size() != requestedTagIds.size()
+                        || !actual.equals(new HashSet<>(requestedTagIds)))) {
+            throw invalidProblemTags();
+        }
+    }
+
+    private BusinessException invalidProblemTags() {
+        return new BusinessException(
+                ResultCodeEnum.PARAM_ERROR.getCode(),
+                "problem tags contain unknown or duplicate ids");
     }
 
     private Map<String, Object> limitsSnapshot(Problem problem) {
@@ -528,6 +633,7 @@ public class ProblemServiceImpl extends ServiceImpl<ProblemMapper, Problem> impl
         snapshot.put("specialJudgeCode", problem.getSpecialJudgeCode());
         snapshot.put("specialJudgeLanguage", problem.getSpecialJudgeLanguage());
         snapshot.put("judgeMode", problem.getJudgeMode());
+        snapshot.put("checker", "exact");
         snapshot.put("difficulty", problem.getDifficulty());
         return snapshot;
     }
@@ -538,5 +644,21 @@ public class ProblemServiceImpl extends ServiceImpl<ProblemMapper, Problem> impl
         } catch (JsonProcessingException exception) {
             throw new BusinessException(ResultCodeEnum.SYSTEM_ERROR);
         }
+    }
+
+    private ProblemTagVO toTagView(ProblemTagProjection projection) {
+        ProblemTagVO view = new ProblemTagVO();
+        view.setId(projection.tagId());
+        view.setName(projection.name());
+        view.setColor(projection.color());
+        return view;
+    }
+
+    private String[] nullPropertyNames(Object source) {
+        BeanWrapper wrapper = new BeanWrapperImpl(source);
+        return java.util.Arrays.stream(wrapper.getPropertyDescriptors())
+                .map(java.beans.PropertyDescriptor::getName)
+                .filter(name -> wrapper.getPropertyValue(name) == null)
+                .toArray(String[]::new);
     }
 }

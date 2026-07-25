@@ -28,7 +28,6 @@ import java.util.Enumeration;
 import java.util.HashSet;
 import java.util.HexFormat;
 import java.util.Set;
-import java.util.regex.Pattern;
 import java.util.zip.CRC32;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.compress.archivers.zip.UnixStat;
@@ -40,15 +39,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 @RequiredArgsConstructor
 public class TestBundleService {
-    private static final Pattern CASE_ID =
-            Pattern.compile("^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$");
-    private static final Set<String> MANIFEST_FIELDS =
-            Set.of("schemaVersion", "judgeMode", "checker", "limits", "cases");
-    private static final Set<String> LIMIT_FIELDS =
-            Set.of("timeLimitMillis", "memoryLimitMiB");
-    private static final Set<String> CASE_FIELDS =
-            Set.of("id", "input", "output", "weight");
-
     private final TestBundleMapper bundles;
     private final ProblemVersionMapper versions;
     private final TestBundleStorage storage;
@@ -100,114 +90,15 @@ public class TestBundleService {
 
     private String validateManifest(String manifestJson, ProblemVersion version) {
         try {
-            JsonNode root = strictObjectMapper().readTree(manifestJson);
-            JsonNode cases = root == null ? null : root.get("cases");
-            JsonNode schemaVersion = root == null ? null : root.get("schemaVersion");
-            JsonNode limits = root == null ? null : root.get("limits");
-            if (root == null || !root.isObject() || cases == null || !cases.isArray()
-                    || !fieldNames(root).equals(MANIFEST_FIELDS)
-                    || schemaVersion == null
-                    || !schemaVersion.isIntegralNumber()
-                    || !schemaVersion.canConvertToInt()
-                    || schemaVersion.intValue() != 1
-                    || !"ACM".equals(root.path("judgeMode").textValue())
-                    || (!"exact".equals(root.path("checker").textValue())
-                            && !"token".equals(root.path("checker").textValue()))
-                    || limits == null
-                    || !limits.isObject()
-                    || !fieldNames(limits).equals(LIMIT_FIELDS)
-                    || cases.isEmpty()
-                    || cases.size() > properties.getMaxCases()) {
-                throw invalidBundle("test bundle manifest cases are invalid");
-            }
-            assertVersionLimits(limits, version);
-            Set<String> ids = new HashSet<>();
-            Set<String> paths = new HashSet<>();
-            for (JsonNode testCase : cases) {
-                if (!testCase.isObject() || !fieldNames(testCase).equals(CASE_FIELDS)) {
-                    throw invalidBundle("test bundle manifest case fields are invalid");
-                }
-                String id = requiredText(testCase, "id");
-                if (!CASE_ID.matcher(id).matches()) {
-                    throw invalidBundle("test case id is invalid");
-                }
-                if (!ids.add(id)) {
-                    throw invalidBundle("test case ids must be unique");
-                }
-                String input = safeCasePath(testCase, "input");
-                String output = safeCasePath(testCase, "output");
-                if (!paths.add(input) || !paths.add(output)) {
-                    throw invalidBundle("test case paths must be unique");
-                }
-                JsonNode weight = testCase.get("weight");
-                if (weight == null
-                        || !weight.isIntegralNumber()
-                        || !weight.canConvertToInt()
-                        || weight.intValue() != 1) {
-                    throw invalidBundle("ACM test case weight must equal 1");
-                }
-            }
-            return objectMapper.writeValueAsString(root);
-        } catch (JsonProcessingException exception) {
-            throw invalidBundle("test bundle manifest is invalid");
+            return new TestBundleV1Contract(objectMapper)
+                    .validateAndCanonicalize(version, manifestJson, properties.getMaxCases());
+        } catch (TestBundleV1Contract.ContractViolation exception) {
+            throw invalidBundle(exception.getMessage());
         }
-    }
-
-    private void assertVersionLimits(JsonNode limits, ProblemVersion version) throws JsonProcessingException {
-        int manifestTime = requiredPositiveInt(limits, "timeLimitMillis");
-        int manifestMemory = requiredPositiveInt(limits, "memoryLimitMiB");
-        JsonNode versionLimits = strictObjectMapper().readTree(version.getLimitsJson());
-        if (versionLimits == null
-                || !versionLimits.isObject()
-                || manifestTime != requiredPositiveInt(versionLimits, "timeLimit")
-                || manifestMemory != requiredPositiveInt(versionLimits, "memoryLimit")) {
-            throw invalidBundle("manifest execution limits disagree with the problem version");
-        }
-    }
-
-    private int requiredPositiveInt(JsonNode node, String field) {
-        JsonNode value = node.get(field);
-        if (value == null
-                || !value.isIntegralNumber()
-                || !value.canConvertToInt()
-                || value.intValue() <= 0) {
-            throw invalidBundle(field + " must be a positive integer");
-        }
-        return value.intValue();
     }
 
     private ObjectMapper strictObjectMapper() {
         return objectMapper.copy().enable(JsonParser.Feature.STRICT_DUPLICATE_DETECTION);
-    }
-
-    private Set<String> fieldNames(JsonNode node) {
-        Set<String> names = new HashSet<>();
-        node.fieldNames().forEachRemaining(names::add);
-        return names;
-    }
-
-    private String requiredText(JsonNode node, String field) {
-        JsonNode value = node.get(field);
-        String text = value == null ? null : value.textValue();
-        if (text == null || text.isBlank()) {
-            throw invalidBundle("test case " + field + " is invalid");
-        }
-        return text;
-    }
-
-    private String safeCasePath(JsonNode node, String field) {
-        String path = requiredText(node, field);
-        if (path.length() > 512
-                || !path.startsWith("cases/")
-                || path.startsWith("/")
-                || path.contains("\\")
-                || path.indexOf('\0') >= 0
-                || path.contains("//")
-                || path.equals("manifest.json")
-                || java.util.Arrays.asList(path.split("/")).contains("..")) {
-            throw invalidBundle("test case " + field + " path is unsafe");
-        }
-        return path;
     }
 
     private void validateArchive(byte[] archive, String canonicalManifest) {

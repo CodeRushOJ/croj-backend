@@ -30,11 +30,13 @@ import org.springframework.test.context.jdbc.Sql;
         "DROP TABLE IF EXISTS t_test_bundle",
         "DROP TABLE IF EXISTS t_problem_version",
         "DROP TABLE IF EXISTS t_problem",
+        "DROP TABLE IF EXISTS t_problem_tag_relation",
         "CREATE TABLE t_problem (id BIGINT PRIMARY KEY, status INT NOT NULL, published_version_id BIGINT, is_deleted INT NOT NULL DEFAULT 0)",
-        "CREATE TABLE t_problem_version (id BIGINT PRIMARY KEY, problem_id BIGINT NOT NULL, version_no INT NOT NULL, state VARCHAR(20) NOT NULL, published_at TIMESTAMP)",
+        "CREATE TABLE t_problem_version (id BIGINT PRIMARY KEY, problem_id BIGINT NOT NULL, version_no INT NOT NULL, state VARCHAR(20) NOT NULL, statement_json CLOB, limits_json CLOB, judge_config_json CLOB, published_at TIMESTAMP, projection_complete BOOLEAN NOT NULL)",
         "CREATE TABLE t_test_bundle (id BIGINT AUTO_INCREMENT PRIMARY KEY, problem_version_id BIGINT NOT NULL UNIQUE, object_key VARCHAR(512), sha256 CHAR(64), size_bytes BIGINT, manifest_json CLOB)",
+        "CREATE TABLE t_problem_tag_relation (problem_id BIGINT NOT NULL, tag_id BIGINT NOT NULL, PRIMARY KEY(problem_id,tag_id))",
         "INSERT INTO t_problem VALUES (42,1,NULL,0)",
-        "INSERT INTO t_problem_version VALUES (101,42,1,'DRAFT',NULL)"
+        "INSERT INTO t_problem_version VALUES (101,42,1,'DRAFT','{\"title\":\"A\",\"description\":\"D\",\"inputDescription\":\"I\",\"outputDescription\":\"O\",\"hints\":[],\"samples\":[],\"source\":null,\"tags\":[]}','{\"timeLimit\":1000,\"memoryLimit\":64,\"totalScore\":100}','{\"judgeMode\":0,\"specialJudge\":false,\"specialJudgeCode\":null,\"specialJudgeLanguage\":null,\"checker\":\"exact\",\"difficulty\":2}',NULL,TRUE)"
 })
 class AdminTestBundleServiceIntegrationTest {
     @Autowired private JdbcTemplate jdbc;
@@ -54,8 +56,9 @@ class AdminTestBundleServiceIntegrationTest {
         byte[] archive = {80, 75, 3, 4};
         doAnswer(invocation -> {
             jdbc.update(
-                    "INSERT INTO t_test_bundle(problem_version_id,object_key,sha256,size_bytes,manifest_json) VALUES (101,'key',?,4,'{}')",
-                    "a".repeat(64));
+                    "INSERT INTO t_test_bundle(problem_version_id,object_key,sha256,size_bytes,manifest_json) VALUES (101,'key',?,4,?)",
+                    "a".repeat(64),
+                    validManifest());
             TestBundle bundle = new TestBundle();
             bundle.setProblemVersionId(101L);
             bundle.setSha256("a".repeat(64));
@@ -134,9 +137,16 @@ class AdminTestBundleServiceIntegrationTest {
         jdbc.update("UPDATE t_problem_version SET state='PUBLISHED' WHERE id=101");
         jdbc.update(
                 "INSERT INTO t_test_bundle(problem_version_id,object_key,sha256,size_bytes,manifest_json) "
-                        + "VALUES (101,'key',?,4,'{}')",
-                "a".repeat(64));
-        jdbc.update("INSERT INTO t_problem_version VALUES (102,42,2,'DRAFT',NULL)");
+                        + "VALUES (101,'key',?,4,?)",
+                "a".repeat(64),
+                validManifest());
+        jdbc.update("""
+                INSERT INTO t_problem_version VALUES (
+                  102,42,2,'DRAFT','{"tags":[]}',
+                  '{"timeLimit":1000,"memoryLimit":64}',
+                  '{"judgeMode":0,"specialJudge":false,"checker":"exact"}',
+                  NULL,TRUE)
+                """);
 
         List<AdminTestBundleService.View> versions = service.list(42);
 
@@ -161,5 +171,14 @@ class AdminTestBundleServiceIntegrationTest {
 
         assertEquals(404, unknown.getStatus().value());
         assertEquals(404, deleted.getStatus().value());
+    }
+
+    private String validManifest() {
+        return """
+                {"schemaVersion":1,"judgeMode":"ACM","checker":"exact",
+                 "limits":{"timeLimitMillis":1000,"memoryLimitMiB":64},"cases":[
+                  {"id":"1","input":"cases/1.in","output":"cases/1.out","weight":1}
+                ]}
+                """;
     }
 }

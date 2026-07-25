@@ -4,6 +4,7 @@ import com.zephyr.croj.common.response.Result;
 import com.zephyr.croj.contest.ContestScoreboardService;
 import com.zephyr.croj.contest.ContestService;
 import com.zephyr.croj.model.dto.contest.ContestRequests;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -38,16 +39,19 @@ public class ContestController {
     }
 
     @GetMapping("/{contestId}/me")
+    @SecurityRequirement(name = "Bearer Authentication")
     public Result<ContestService.RegistrationStatus> me(@PathVariable long contestId) {
         return Result.success(contests.registrationStatus(contestId, requiredUserId()));
     }
 
     @PostMapping("/{contestId}/registrations")
+    @SecurityRequirement(name = "Bearer Authentication")
     public Result<String> register(@PathVariable long contestId) {
         return Result.success(contests.register(contestId, requiredUserId()));
     }
 
     @DeleteMapping("/{contestId}/registrations/me")
+    @SecurityRequirement(name = "Bearer Authentication")
     public Result<String> cancelRegistration(@PathVariable long contestId) {
         return Result.success(contests.cancelRegistration(contestId, requiredUserId()));
     }
@@ -68,6 +72,7 @@ public class ContestController {
     }
 
     @PostMapping("/{contestId}/clarifications")
+    @SecurityRequirement(name = "Bearer Authentication")
     public Result<Long> ask(
             @PathVariable long contestId,
             @RequestBody @Valid ContestRequests.Clarification clarification) {

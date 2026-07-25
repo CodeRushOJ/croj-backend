@@ -32,7 +32,31 @@
     </resultMap>
 
     <!-- 带标签和用户提交信息的问题列表结果映射 -->
-    <resultMap id="ProblemVOResultMap" type="com.zephyr.croj.model.vo.ProblemVO" extends="BaseResultMap">
+    <resultMap id="ProblemVOResultMap" type="com.zephyr.croj.model.vo.ProblemVO">
+        <id column="id" property="id" />
+        <result column="problem_no" property="problemNo" />
+        <result column="title" property="title" />
+        <result column="description" property="description" />
+        <result column="input_description" property="inputDescription" />
+        <result column="output_description" property="outputDescription" />
+        <result column="hints" property="hints" typeHandler="com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler"/>
+        <result column="samples" property="samples" typeHandler="com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler" />
+        <result column="time_limit" property="timeLimit" />
+        <result column="memory_limit" property="memoryLimit" />
+        <result column="difficulty" property="difficulty" />
+        <result column="is_special_judge" property="isSpecialJudge" />
+        <result column="special_judge_language" property="specialJudgeLanguage" />
+        <result column="judge_mode" property="judgeMode" />
+        <result column="total_score" property="totalScore" />
+        <result column="source" property="source" />
+        <result column="create_user_id" property="createUserId" />
+        <result column="submit_count" property="submitCount" />
+        <result column="accepted_count" property="acceptedCount" />
+        <result column="status" property="status" />
+        <result column="published_version_id" property="publishedVersionId" />
+        <result column="create_time" property="createTime" />
+        <result column="update_time" property="updateTime" />
+        <result column="is_deleted" property="isDeleted" />
         <result column="user_status" property="userStatus" />
     </resultMap>
 
@@ -63,7 +87,6 @@
           ELSE p.difficulty
         END AS difficulty,
         p.is_special_judge,
-        p.special_judge_code,
         p.special_judge_language,
         p.judge_mode,
         p.total_score,
@@ -120,13 +143,36 @@
                 )
             </if>
             <if test="tagIds != null and tagIds.size() > 0">
-                AND p.id IN (
-                SELECT DISTINCT problem_id
-                FROM t_problem_tag_relation
-                WHERE tag_id IN
-                <foreach collection="tagIds" item="tagId" open="(" separator="," close=")">
-                    #{tagId}
-                </foreach>
+                AND (
+                  (
+                    (#{canManageAll}
+                      OR (#{userId} IS NOT NULL AND p.create_user_id = #{userId}))
+                    AND p.id IN (
+                      SELECT DISTINCT problem_id
+                      FROM t_problem_tag_relation
+                      WHERE tag_id IN
+                      <foreach collection="tagIds" item="tagId" open="(" separator="," close=")">
+                          #{tagId}
+                      </foreach>
+                    )
+                  )
+                  OR
+                  (
+                    NOT #{canManageAll}
+                    AND (#{userId} IS NULL OR p.create_user_id &lt;&gt; #{userId})
+                    AND p.published_version_id IS NOT NULL
+                    AND EXISTS (
+                      SELECT 1
+                      FROM JSON_TABLE(
+                        pv.statement_json,
+                        '$.tags[*]' COLUMNS(tag_id BIGINT PATH '$.id')
+                      ) AS published_tag
+                      WHERE published_tag.tag_id IN
+                      <foreach collection="tagIds" item="tagId" open="(" separator="," close=")">
+                          #{tagId}
+                      </foreach>
+                    )
+                  )
                 )
             </if>
         </where>

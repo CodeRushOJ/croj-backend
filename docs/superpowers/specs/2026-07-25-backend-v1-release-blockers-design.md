@@ -18,12 +18,15 @@ existing named scheme.
 
 ## TestBundle v1 contract
 
-A single validator compares both sides of the contract:
+A single validator checks the entire manifest and compares both sides of the
+contract:
 
 - the immutable `ProblemVersion` must be ACM (`judgeMode=0`), non-SPJ, and have
   complete positive execution limits;
 - the manifest must be schema v1, `judgeMode=ACM`, and use only `exact` or
   `token`;
+- the manifest must have the exact supported field set and contain bounded,
+  unique cases with safe unique paths and ACM weight `1`;
 - manifest limits must equal version limits.
 
 Attach validates before storage. Publish validates the persisted bundle again so
@@ -34,8 +37,8 @@ resources remains intact.
 
 ## Immutable tag snapshots
 
-V11 adds `tags_json` to `t_problem_version`. Draft creation snapshots ordered
-`{id,name,color}` tag values after validating the requested tag IDs. Published
+Draft creation stores ordered `{id,name,color}` tag values in the immutable
+`statement_json.tags` projection after validating the requested tag IDs. Published
 read models use only the published version's tags. Public list filtering also
 queries the published snapshot, while administrators retain draft-oriented
 management behavior.
@@ -54,8 +57,8 @@ tag ID is overloaded as a problem ID.
 V11 never copies current `t_problem.source`, `difficulty`, or tags into arbitrary
 historical versions. It adds a `projection_complete` marker. Existing versions
 remain byte-for-byte unchanged and are marked incomplete unless their own JSON
-already contains all required public projection fields (including explicit
-source, difficulty, and tags).
+passes the MySQL JSON Schema/type contract for every required public projection
+field (including explicit source, difficulty, and tags) and has unique tag IDs.
 
 If a problem points at an incomplete version, V11 clears
 `published_version_id` and makes the aggregate private. Incomplete versions stay

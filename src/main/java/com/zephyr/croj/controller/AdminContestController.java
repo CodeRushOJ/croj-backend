@@ -4,6 +4,7 @@ import com.zephyr.croj.common.response.Result;
 import com.zephyr.croj.contest.ContestAdminService;
 import com.zephyr.croj.contest.ContestScoreboardService;
 import com.zephyr.croj.model.dto.contest.ContestRequests;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -21,6 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/v1/admin/contests")
 @RequiredArgsConstructor
 @PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN')")
+@SecurityRequirement(name = "Bearer Authentication")
 public class AdminContestController {
     private final ContestAdminService contests;
     private final ContestScoreboardService scoreboards;

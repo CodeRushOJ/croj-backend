@@ -177,17 +177,25 @@ class MigrationContractTest {
     }
 
     @Test
-    void legacyProblemVersionsGainEveryPublicProjectionFieldInAForwardOnlyMigration()
+    void legacyProblemVersionsAreMarkedIncompleteWithoutCopyingMutableDraftFields()
             throws IOException {
         assertTrue(Files.isRegularFile(PROBLEM_VERSION_PROJECTION));
         String sql = Files.readString(PROBLEM_VERSION_PROJECTION).toLowerCase();
+        assertTrue(sql.contains("alter table `t_problem_version`"));
+        assertTrue(sql.contains("`projection_complete`"));
         assertTrue(sql.contains("update `t_problem_version`"));
         assertTrue(sql.contains("json_contains_path"));
-        assertTrue(sql.contains("json_set"));
         assertTrue(sql.contains("'$.source'"));
         assertTrue(sql.contains("'$.difficulty'"));
-        assertTrue(sql.contains("p.`source`"));
-        assertTrue(sql.contains("p.`difficulty`"));
-        assertFalse(sql.contains("update `t_problem`"));
+        assertTrue(sql.contains("'$.tags'"));
+        assertTrue(sql.contains("'$.checker'"));
+        assertTrue(sql.contains("json_schema_valid"));
+        assertTrue(sql.contains("json_table"));
+        assertTrue(sql.contains("count(distinct"));
+        assertTrue(sql.contains("update `t_problem`"));
+        assertTrue(sql.contains("`published_version_id` = null"));
+        assertFalse(sql.contains("json_set"));
+        assertFalse(sql.contains("p.`source`"));
+        assertFalse(sql.contains("p.`difficulty`"));
     }
 }

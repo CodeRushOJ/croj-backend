@@ -1,6 +1,7 @@
 package com.zephyr.croj.problem;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -54,7 +55,11 @@ class TestBundleServiceTest {
         version.setId(101L);
         version.setProblemId(42L);
         version.setState("DRAFT");
+        version.setProjectionComplete(true);
+        version.setStatementJson(completeStatement());
         version.setLimitsJson("{\"timeLimit\":1000,\"memoryLimit\":64,\"totalScore\":100}");
+        version.setJudgeConfigJson(
+                completeJudge(0, false, "exact"));
         when(versions.selectById(101L)).thenReturn(version);
         when(bundles.insert(any(TestBundle.class))).thenAnswer(invocation -> {
             invocation.<TestBundle>getArgument(0).setId(7L);
@@ -88,7 +93,11 @@ class TestBundleServiceTest {
         version.setId(101L);
         version.setProblemId(42L);
         version.setState("DRAFT");
+        version.setProjectionComplete(true);
+        version.setStatementJson(completeStatement());
         version.setLimitsJson("{\"timeLimit\":1000,\"memoryLimit\":64,\"totalScore\":100}");
+        version.setJudgeConfigJson(
+                completeJudge(0, false, "exact"));
         when(versions.selectById(101L)).thenReturn(version);
         String manifest = """
                 {"schemaVersion":1,"judgeMode":"ACM","checker":"exact","cases":[
@@ -218,6 +227,86 @@ class TestBundleServiceTest {
     }
 
     @Test
+    void rejectsOiProblemVersionsBeforeObjectStorage() {
+        draftVersion(1, false, "exact");
+        String manifest = validManifest();
+        byte[] archive = bundleZip(
+                manifest,
+                Map.of("cases/1.in", "in", "cases/1.out", "ok"));
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> service.attach(42L, 101L, archive, manifest));
+
+        assertEquals("problem version is incompatible with TestBundle v1", exception.getMessage());
+        verifyNoInteractions(storage);
+        verifyNoInteractions(bundles);
+    }
+
+    @Test
+    void rejectsSpecialJudgeProblemVersionsBeforeObjectStorage() {
+        draftVersion(0, true, "exact");
+        String manifest = validManifest();
+        byte[] archive = bundleZip(
+                manifest,
+                Map.of("cases/1.in", "in", "cases/1.out", "ok"));
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> service.attach(42L, 101L, archive, manifest));
+
+        assertEquals("problem version is incompatible with TestBundle v1", exception.getMessage());
+        verifyNoInteractions(storage);
+        verifyNoInteractions(bundles);
+    }
+
+    @Test
+    void rejectsAManifestWhoseCheckerDiffersFromTheProblemVersion() {
+        draftVersion(0, false, "token");
+        String manifest = validManifest();
+        byte[] archive = bundleZip(
+                manifest,
+                Map.of("cases/1.in", "in", "cases/1.out", "ok"));
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> service.attach(42L, 101L, archive, manifest));
+
+        assertEquals("problem version is incompatible with TestBundle v1", exception.getMessage());
+        verifyNoInteractions(storage);
+        verifyNoInteractions(bundles);
+    }
+
+    @Test
+    void rejectsLegacyVersionsWhosePublicProjectionIsIncomplete() throws Exception {
+        ProblemVersion version = new ProblemVersion();
+        version.setId(101L);
+        version.setProblemId(42L);
+        version.setState("DRAFT");
+        version.setProjectionComplete(true);
+        version.setStatementJson(completeStatement());
+        version.setLimitsJson("{\"timeLimit\":1000,\"memoryLimit\":64,\"totalScore\":100}");
+        version.setJudgeConfigJson(
+                completeJudge(0, false, "exact"));
+        assertDoesNotThrow(() -> ProblemVersion.class
+                        .getMethod("setProjectionComplete", Boolean.class))
+                .invoke(version, false);
+        when(versions.selectById(101L)).thenReturn(version);
+        String manifest = validManifest();
+        byte[] archive = bundleZip(
+                manifest,
+                Map.of("cases/1.in", "in", "cases/1.out", "ok"));
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> service.attach(42L, 101L, archive, manifest));
+
+        assertEquals("problem version is incompatible with TestBundle v1", exception.getMessage());
+        verifyNoInteractions(storage);
+        verifyNoInteractions(bundles);
+    }
+
+    @Test
     void defaultLimitsFitTheJudgingBatchExecutionEnvelope() {
         TestBundleProperties defaults = new TestBundleProperties();
 
@@ -341,12 +430,33 @@ class TestBundleServiceTest {
     }
 
     private void draftVersion() {
+        draftVersion(0, false, "exact");
+    }
+
+    private void draftVersion(int judgeMode, boolean specialJudge, String checker) {
         ProblemVersion version = new ProblemVersion();
         version.setId(101L);
         version.setProblemId(42L);
         version.setState("DRAFT");
+        version.setProjectionComplete(true);
+        version.setStatementJson(completeStatement());
         version.setLimitsJson("{\"timeLimit\":1000,\"memoryLimit\":64,\"totalScore\":100}");
+        version.setJudgeConfigJson(completeJudge(judgeMode, specialJudge, checker));
         when(versions.selectById(101L)).thenReturn(version);
+    }
+
+    private String completeStatement() {
+        return """
+                {"title":"A","description":"D","inputDescription":"I",
+                 "outputDescription":"O","hints":[],"samples":[],"source":null,"tags":[]}
+                """;
+    }
+
+    private String completeJudge(int judgeMode, boolean specialJudge, String checker) {
+        return """
+                {"judgeMode":%d,"specialJudge":%s,"specialJudgeCode":null,
+                 "specialJudgeLanguage":null,"checker":"%s","difficulty":2}
+                """.formatted(judgeMode, specialJudge, checker);
     }
 
     private String validManifest() {

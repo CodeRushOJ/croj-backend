@@ -11,6 +11,7 @@ import com.zephyr.croj.mapper.ProblemTagMapper;
 import com.zephyr.croj.mapper.ProblemTagRelationMapper;
 import com.zephyr.croj.model.entity.ProblemTag;
 import com.zephyr.croj.model.entity.ProblemTagRelation;
+import com.zephyr.croj.model.projection.ProblemTagProjection;
 import com.zephyr.croj.model.entity.User;
 import com.zephyr.croj.model.vo.ProblemTagVO;
 import com.zephyr.croj.service.ProblemTagService;
@@ -186,15 +187,12 @@ public class ProblemTagServiceImpl extends ServiceImpl<ProblemTagMapper, Problem
     }
 
     @Override
-    public List<ProblemTagVO> getTagsByProblemIds(List<Long> problemIds) {
+    public List<ProblemTagProjection> getTagsByProblemIds(List<Long> problemIds) {
         if (problemIds.isEmpty()) {
             return List.of();
         }
 
-        List<ProblemTag> tags = baseMapper.getTagsByProblemIds(problemIds);
-        return tags.stream()
-                .map(this::convertToVO)
-                .collect(Collectors.toList());
+        return baseMapper.getTagsByProblemIds(problemIds);
     }
 
     @Override

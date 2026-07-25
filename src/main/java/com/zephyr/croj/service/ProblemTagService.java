@@ -3,6 +3,7 @@ package com.zephyr.croj.service;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.spring.service.IService;
 import com.zephyr.croj.model.entity.ProblemTag;
+import com.zephyr.croj.model.projection.ProblemTagProjection;
 import com.zephyr.croj.model.vo.ProblemTagVO;
 
 import java.util.List;
@@ -78,7 +79,7 @@ public interface ProblemTagService extends IService<ProblemTag> {
      * @param problemIds 题目ID列表
      * @return 题目ID到标签列表的映射
      */
-    List<ProblemTagVO> getTagsByProblemIds(List<Long> problemIds);
+    List<ProblemTagProjection> getTagsByProblemIds(List<Long> problemIds);
 
     /**
      * 保存题目标签关联

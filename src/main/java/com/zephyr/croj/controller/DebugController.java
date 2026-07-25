@@ -1,6 +1,7 @@
 package com.zephyr.croj.controller;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -11,6 +12,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/debug")
 @Tag(name = "调试", description = "调试接口")
+@SecurityRequirement(name = "Bearer Authentication")
 public class DebugController {
 
     @GetMapping("/auth")

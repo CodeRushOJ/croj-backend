@@ -241,13 +241,14 @@ mysql_query "
   ), (
     9102, 9001, 2, 'DRAFT',
     JSON_OBJECT(
-      'title', 'Complete draft title',
-      'description', 'Complete description',
-      'inputDescription', 'Complete input',
-      'outputDescription', 'Complete output',
+      'title', 'Historical draft title',
+      'description', 'Historical description',
+      'inputDescription', 'Historical input',
+      'outputDescription', 'Historical output',
       'hints', JSON_ARRAY(),
       'samples', JSON_ARRAY(),
-      'source', 'snapshot-source'
+      'source', 'snapshot-source',
+      'tags', JSON_ARRAY()
     ),
     JSON_OBJECT('timeLimit', 2000, 'memoryLimit', 512, 'totalScore', 100),
     JSON_OBJECT(
@@ -255,12 +256,68 @@ mysql_query "
       'specialJudgeCode', NULL,
       'specialJudgeLanguage', NULL,
       'judgeMode', 0,
+      'checker', 'exact',
       'difficulty', 1
     ),
     42, NULL
   );
   UPDATE t_problem SET published_version_id = 9101 WHERE id = 9001;
+
+  INSERT INTO t_problem (
+    id, problem_no, title, description, input_description, output_description,
+    difficulty, source, create_user_id, status, published_version_id
+  ) VALUES (
+    9002, 'PMIG12', 'Malformed legacy title', 'Legacy description', 'Legacy input', 'Legacy output',
+    2, 'legacy-source', 42, 0, NULL
+  );
+  INSERT INTO t_problem_version (
+    id, problem_id, version_no, state, statement_json, limits_json, judge_config_json,
+    created_by, published_at
+  ) VALUES (
+    9201, 9002, 1, 'PUBLISHED',
+    JSON_OBJECT(
+      'title', NULL,
+      'description', 'Legacy description',
+      'inputDescription', 'Legacy input',
+      'outputDescription', 'Legacy output',
+      'hints', JSON_ARRAY(),
+      'samples', JSON_ARRAY(),
+      'source', 'legacy-source',
+      'tags', JSON_ARRAY(JSON_OBJECT(
+        'id', 'not-a-number', 'name', NULL, 'color', '#123456'
+      ))
+    ),
+    JSON_OBJECT('timeLimit', '1000', 'memoryLimit', 256, 'totalScore', 100),
+    JSON_OBJECT(
+      'specialJudge', FALSE,
+      'specialJudgeCode', NULL,
+      'specialJudgeLanguage', NULL,
+      'judgeMode', 0,
+      'checker', 'exact',
+      'difficulty', NULL
+    ),
+    42, CURRENT_TIMESTAMP(3)
+  );
+  UPDATE t_problem SET published_version_id = 9201 WHERE id = 9002;
 " >/dev/null
+
+legacy_version_hashes_before="$(mysql_query "
+  SELECT GROUP_CONCAT(
+    CONCAT(
+      id, ':',
+      SHA2(CONCAT(
+        CAST(statement_json AS CHAR),
+        '|',
+        CAST(limits_json AS CHAR),
+        '|',
+        CAST(judge_config_json AS CHAR)
+      ), 256)
+    )
+    ORDER BY id SEPARATOR ','
+  )
+  FROM t_problem_version
+  WHERE problem_id = 9001;
+")"
 
 printf 'Upgrading the populated schema through V11\n'
 run_flyway 11
@@ -289,17 +346,87 @@ custom_category="$(mysql_query "
 assert_equals "V10 preserves an operator-customized category" \
   "Operator custom problem forum|999" "$custom_category"
 
-legacy_projection="$(mysql_query "
+legacy_version_count="$(mysql_query "
+  SELECT COUNT(*)
+  FROM t_problem_version
+  WHERE problem_id = 9001;
+")"
+assert_equals "V11 preserves every historical problem version row" \
+  "2" "$legacy_version_count"
+
+legacy_version_hashes_after="$(mysql_query "
+  SELECT GROUP_CONCAT(
+    CONCAT(
+      id, ':',
+      SHA2(CONCAT(
+        CAST(statement_json AS CHAR),
+        '|',
+        CAST(limits_json AS CHAR),
+        '|',
+        CAST(judge_config_json AS CHAR)
+      ), 256)
+    )
+    ORDER BY id SEPARATOR ','
+  )
+  FROM t_problem_version
+  WHERE problem_id = 9001;
+")"
+assert_equals "V11 never rewrites historical snapshot JSON from mutable draft fields" \
+  "$legacy_version_hashes_before" "$legacy_version_hashes_after"
+
+legacy_projection_flags="$(mysql_query "
+  SELECT GROUP_CONCAT(
+    CONCAT(id, ':', projection_complete)
+    ORDER BY id SEPARATOR ','
+  )
+  FROM t_problem_version
+  WHERE problem_id = 9001;
+")"
+assert_equals "V11 distinguishes complete self-contained snapshots from uncertain history" \
+  "9101:0,9102:1" "$legacy_projection_flags"
+
+legacy_visibility="$(mysql_query "
+  SELECT CONCAT(status, '|', IFNULL(CAST(published_version_id AS CHAR), 'NULL'))
+  FROM t_problem
+  WHERE id = 9001;
+")"
+assert_equals "V11 fails closed when the published pointer targets an incomplete version" \
+  "1|NULL" "$legacy_visibility"
+
+malformed_projection="$(mysql_query "
   SELECT CONCAT(
-    JSON_UNQUOTE(JSON_EXTRACT(statement_json, '$.source')),
+    pv.projection_complete,
     '|',
-    JSON_UNQUOTE(JSON_EXTRACT(judge_config_json, '$.difficulty'))
+    p.status,
+    '|',
+    IFNULL(CAST(p.published_version_id AS CHAR), 'NULL')
+  )
+  FROM t_problem_version pv
+  JOIN t_problem p ON p.id = pv.problem_id
+  WHERE pv.id = 9201;
+")"
+assert_equals "V11 rejects path-complete projections with invalid JSON value types" \
+  "0|1|NULL" "$malformed_projection"
+
+legacy_missing_projection="$(mysql_query "
+  SELECT CONCAT(
+    IF(
+      JSON_CONTAINS_PATH(statement_json, 'one', '$.source'),
+      JSON_UNQUOTE(JSON_EXTRACT(statement_json, '$.source')),
+      'MISSING'
+    ),
+    '|',
+    IF(
+      JSON_CONTAINS_PATH(judge_config_json, 'one', '$.difficulty'),
+      JSON_UNQUOTE(JSON_EXTRACT(judge_config_json, '$.difficulty')),
+      'MISSING'
+    )
   )
   FROM t_problem_version
   WHERE id = 9101;
 ")"
-assert_equals "V11 completes legacy public problem snapshots" \
-  "legacy-source|3" "$legacy_projection"
+assert_equals "V11 does not copy the latest draft projection into an older version" \
+  "MISSING|MISSING" "$legacy_missing_projection"
 
 complete_projection="$(mysql_query "
   SELECT CONCAT(
@@ -312,5 +439,79 @@ complete_projection="$(mysql_query "
 ")"
 assert_equals "V11 preserves fields already stored in a problem snapshot" \
   "snapshot-source|1" "$complete_projection"
+
+mysql_query "
+  INSERT INTO t_problem_tag (id, name, color)
+  VALUES (77, 'recovered-tag', '#123456');
+  INSERT INTO t_problem_version (
+    id, problem_id, version_no, state, statement_json, limits_json,
+    judge_config_json, created_by, published_at, projection_complete
+  ) VALUES (
+    9103, 9001, 3, 'DRAFT',
+    JSON_OBJECT(
+      'title', 'Audited replacement',
+      'description', 'Audited description',
+      'inputDescription', 'Audited input',
+      'outputDescription', 'Audited output',
+      'hints', JSON_ARRAY(),
+      'samples', JSON_ARRAY(),
+      'source', 'audited-source',
+      'tags', JSON_ARRAY(JSON_OBJECT(
+        'id', 77, 'name', 'recovered-tag', 'color', '#123456'
+      ))
+    ),
+    JSON_OBJECT('timeLimit', 1000, 'memoryLimit', 256, 'totalScore', 100),
+    JSON_OBJECT(
+      'specialJudge', FALSE,
+      'specialJudgeCode', NULL,
+      'specialJudgeLanguage', NULL,
+      'judgeMode', 0,
+      'checker', 'exact',
+      'difficulty', 2
+    ),
+    42, NULL, 1
+  );
+  INSERT INTO t_test_bundle (
+    problem_version_id, object_key, sha256, size_bytes, manifest_json
+  ) VALUES (
+    9103, 'test-bundles/9001/9103/recovered.zip', REPEAT('b', 64), 12,
+    JSON_OBJECT(
+      'schemaVersion', 1,
+      'judgeMode', 'ACM',
+      'checker', 'exact',
+      'limits', JSON_OBJECT('timeLimitMillis', 1000, 'memoryLimitMiB', 256),
+      'cases', JSON_ARRAY(JSON_OBJECT(
+        'id', '1',
+        'input', 'cases/1.in',
+        'output', 'cases/1.out',
+        'weight', 1
+      ))
+    )
+  );
+  START TRANSACTION;
+  SELECT id FROM t_problem WHERE id = 9001 FOR UPDATE;
+  SELECT id FROM t_problem_version WHERE id = 9103 AND problem_id = 9001 FOR UPDATE;
+  UPDATE t_problem_version
+  SET state = 'PUBLISHED', published_at = CURRENT_TIMESTAMP(3)
+  WHERE id = 9103 AND state = 'DRAFT' AND projection_complete = 1;
+  DELETE FROM t_problem_tag_relation WHERE problem_id = 9001;
+  INSERT INTO t_problem_tag_relation (problem_id, tag_id) VALUES (9001, 77);
+  UPDATE t_problem
+  SET published_version_id = 9103, status = 0
+  WHERE id = 9001 AND is_deleted = 0;
+  COMMIT;
+" >/dev/null
+
+recovered_projection="$(mysql_query "
+  SELECT CONCAT(
+    p.status, '|', p.published_version_id, '|', pv.state, '|', r.tag_id
+  )
+  FROM t_problem p
+  JOIN t_problem_version pv ON pv.id = p.published_version_id
+  JOIN t_problem_tag_relation r ON r.problem_id = p.id
+  WHERE p.id = 9001;
+")"
+assert_equals "an audited complete replacement can restore public visibility" \
+  "0|9103|PUBLISHED|77" "$recovered_projection"
 
 printf 'MySQL 8.4 Flyway migration gate passed.\n'

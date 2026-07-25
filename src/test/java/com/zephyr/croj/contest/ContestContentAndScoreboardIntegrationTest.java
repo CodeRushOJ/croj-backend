@@ -23,6 +23,7 @@ import org.springframework.test.context.jdbc.Sql;
 })
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Sql(statements = {
+        "SET TIME ZONE 'UTC'",
         "DROP TABLE IF EXISTS t_contest_clarification_reply",
         "DROP TABLE IF EXISTS t_contest_clarification",
         "DROP TABLE IF EXISTS t_contest_scoreboard_snapshot",

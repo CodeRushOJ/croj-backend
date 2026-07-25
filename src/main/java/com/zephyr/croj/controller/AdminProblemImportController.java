@@ -5,6 +5,7 @@ import com.zephyr.croj.common.exception.BusinessException;
 import com.zephyr.croj.common.response.Result;
 import com.zephyr.croj.problem.importer.ProblemImportResponses;
 import com.zephyr.croj.problem.importer.ProblemImportService;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.servlet.http.HttpServletRequest;
 import java.io.IOException;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +23,7 @@ import org.springframework.web.multipart.MultipartFile;
 @RequestMapping("/v1/admin/problem-imports")
 @RequiredArgsConstructor
 @ConditionalOnProperty(prefix = "app.test-bundle", name = "enabled", havingValue = "true")
+@SecurityRequirement(name = "Bearer Authentication")
 public class AdminProblemImportController {
     private final ProblemImportService imports;
     private final HttpServletRequest request;

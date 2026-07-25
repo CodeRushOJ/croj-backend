@@ -82,10 +82,7 @@ public class ProblemController {
      * 根据ID获取问题详情
      */
     @GetMapping("/{id}")
-    @Operation(
-            summary = "根据ID获取问题详情",
-            security = @SecurityRequirement(name = "Bearer Authentication")
-    )
+    @Operation(summary = "根据ID获取问题详情")
     public Result<ProblemVO> getProblemById(@PathVariable Long id) {
         Long userId = getUserId();
         ProblemVO problem = problemService.getProblemById(id, userId);
@@ -96,10 +93,7 @@ public class ProblemController {
      * 根据题目编号获取问题详情
      */
     @GetMapping("/no/{problemNo}")
-    @Operation(
-            summary = "根据题目编号获取问题详情",
-            security = @SecurityRequirement(name = "Bearer Authentication")
-    )
+    @Operation(summary = "根据题目编号获取问题详情")
     public Result<ProblemVO> getProblemByNo(@PathVariable String problemNo) {
         Long userId = getUserId();
         ProblemVO problem = problemService.getProblemByNo(problemNo, userId);
@@ -110,10 +104,7 @@ public class ProblemController {
      * 获取问题列表
      */
     @PostMapping("/list")
-    @Operation(
-            summary = "获取问题列表",
-            security = @SecurityRequirement(name = "Bearer Authentication")
-    )
+    @Operation(summary = "获取问题列表")
     public Result<IPage<ProblemListItemVO>> getProblemList(@RequestBody @Valid ProblemQueryDTO queryDTO) {
         Long userId = getUserId();
         IPage<ProblemListItemVO> problems = problemService.getProblemList(queryDTO, userId);

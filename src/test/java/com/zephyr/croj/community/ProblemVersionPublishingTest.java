@@ -2,6 +2,7 @@ package com.zephyr.croj.community;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyList;
@@ -18,14 +19,17 @@ import com.zephyr.croj.mapper.ProblemMapper;
 import com.zephyr.croj.mapper.ProblemVersionMapper;
 import com.zephyr.croj.model.dto.ProblemCreateDTO;
 import com.zephyr.croj.model.dto.ProblemUpdateDTO;
+import com.zephyr.croj.common.exception.BusinessException;
 import com.zephyr.croj.model.entity.Problem;
 import com.zephyr.croj.model.entity.ProblemVersion;
 import com.zephyr.croj.model.entity.User;
+import com.zephyr.croj.model.projection.ProblemTagProjection;
 import com.zephyr.croj.service.ProblemTagService;
 import com.zephyr.croj.service.UserService;
 import com.zephyr.croj.service.impl.ProblemServiceImpl;
 import com.zephyr.croj.model.dto.ProblemQueryDTO;
 import com.zephyr.croj.model.vo.ProblemListItemVO;
+import com.zephyr.croj.model.vo.ProblemTagVO;
 import com.zephyr.croj.model.vo.ProblemVO;
 import org.apache.ibatis.annotations.Select;
 import java.nio.charset.StandardCharsets;
@@ -89,11 +93,42 @@ class ProblemVersionPublishingTest {
         assertEquals("DRAFT", version.getValue().getState());
         assertEquals(1, version.getValue().getVersionNo());
         assertEquals(11L, version.getValue().getProblemId());
+        assertEquals(
+                true,
+                version.getValue().getJudgeConfigJson().contains("\"checker\":\"exact\""));
         ArgumentCaptor<Problem> insertedProblem = ArgumentCaptor.forClass(Problem.class);
         verify(problems).insert(insertedProblem.capture());
         assertEquals(1, insertedProblem.getValue().getStatus());
         assertNull(insertedProblem.getValue().getPublishedVersionId());
         verify(problems, never()).updateById(any(Problem.class));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void requestedTagsMustAllResolveBeforeTheImmutableVersionIsCreated() {
+        User admin = new User();
+        admin.setId(2L);
+        admin.setRole(1);
+        when(users.getById(2L)).thenReturn(admin);
+        when(problems.selectOne(any(Wrapper.class), anyBoolean())).thenReturn(null);
+        when(problems.insert(any(Problem.class))).thenAnswer(invocation -> {
+            invocation.<Problem>getArgument(0).setId(11L);
+            return 1;
+        });
+        when(tags.saveProblemTags(11L, List.of(5L, 999L))).thenReturn(true);
+        ProblemTagVO resolved = new ProblemTagVO();
+        resolved.setId(5L);
+        resolved.setName("graphs");
+        resolved.setColor("#123456");
+        when(tags.getTagsByProblemId(11L)).thenReturn(List.of(resolved));
+        ProblemCreateDTO request = createRequest();
+        request.setTagIds(List.of(5L, 999L));
+
+        BusinessException exception =
+                assertThrows(BusinessException.class, () -> service.createProblem(request, 2L));
+
+        assertEquals("problem tags contain unknown or duplicate ids", exception.getMessage());
+        verify(versions, never()).insert(any(ProblemVersion.class));
     }
 
     @Test
@@ -178,6 +213,29 @@ class ProblemVersionPublishingTest {
     }
 
     @Test
+    void publicReadersSeePublishedTagSnapshotsInsteadOfEditedDraftRelations() {
+        User reader = new User();
+        reader.setId(7L);
+        reader.setRole(0);
+        when(users.getById(7L)).thenReturn(reader);
+        Problem editedDraft = problem(11L, 0, 23L);
+        when(problems.selectById(11L)).thenReturn(editedDraft);
+        ProblemVersion published =
+                publishedVersion(23L, "Published title", 1000, 256, 1, 0, 100);
+        published.setStatementJson(published.getStatementJson().replace(
+                "\"tags\":[]",
+                "\"tags\":["
+                        + "{\"id\":5,\"name\":\"published\",\"color\":\"#111111\"}]"));
+        when(versions.selectById(23L)).thenReturn(published);
+
+        ProblemVO view = service.getProblemById(11L, 7L);
+
+        assertEquals(List.of(5L), view.getTags().stream().map(ProblemTagVO::getId).toList());
+        assertEquals("published", view.getTags().get(0).getName());
+        verify(tags, never()).getTagsByProblemId(11L);
+    }
+
+    @Test
     void publicListUsesPublishedSnapshotsAndDoesNotReturnAnotherUsersPrivateDraft() {
         User reader = new User();
         reader.setId(7L);
@@ -214,6 +272,38 @@ class ProblemVersionPublishingTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    void batchTagsAreGroupedByProblemIdInsteadOfTagId() {
+        User administrator = new User();
+        administrator.setId(9L);
+        administrator.setRole(1);
+        when(users.getById(9L)).thenReturn(administrator);
+        ProblemVO problem = new ProblemVO();
+        problem.setId(42L);
+        problem.setTitle("Problem");
+        problem.setDifficulty(1);
+        problem.setSubmitCount(0);
+        problem.setAcceptedCount(0);
+        Page<ProblemVO> page = new Page<>(1, 20, 1);
+        page.setRecords(List.of(problem));
+        when(problems.getProblemList(
+                        any(Page.class), eq(null), eq(null), eq(null), anyList(), eq(9L), eq(true)))
+                .thenReturn(page);
+        when(tags.getTagsByProblemIds(List.of(42L))).thenReturn(List.of(
+                new ProblemTagProjection(42L, 7L, "graphs", "#123456")));
+        ProblemQueryDTO query = new ProblemQueryDTO();
+        query.setCurrent(1);
+        query.setSize(20);
+        query.setTagIds(List.of());
+
+        IPage<ProblemListItemVO> result = service.getProblemList(query, 9L);
+
+        assertEquals(List.of(7L), result.getRecords().get(0).getTags().stream()
+                .map(ProblemTagVO::getId)
+                .toList());
+    }
+
+    @Test
     void problemEditsExposeAnAggregateForUpdateMapperContract() throws Exception {
         Select lock = ProblemMapper.class
                 .getMethod("selectForUpdate", Long.class)
@@ -235,6 +325,8 @@ class ProblemVersionPublishingTest {
         assertEquals(
                 true,
                 occurrences(mapper, "JSON_EXTRACT(pv.judge_config_json, '$.difficulty')") >= 2);
+        assertEquals(true, mapper.contains("JSON_TABLE"));
+        assertEquals(true, mapper.contains("$.tags[*]"));
     }
 
     @Test
@@ -265,11 +357,28 @@ class ProblemVersionPublishingTest {
         problem.setTimeLimit(1000);
         problem.setMemoryLimit(256);
         problem.setDifficulty(1);
+        problem.setIsSpecialJudge(false);
         problem.setJudgeMode(0);
         problem.setTotalScore(100);
         problem.setStatus(status);
         problem.setPublishedVersionId(publishedVersionId);
         return problem;
+    }
+
+    private ProblemCreateDTO createRequest() {
+        ProblemCreateDTO request = new ProblemCreateDTO();
+        request.setTitle("Two Sum");
+        request.setDescription("Find two values.");
+        request.setInputDescription("An array.");
+        request.setOutputDescription("Two indices.");
+        request.setHints(List.of("Use a map"));
+        request.setSamples(List.of(Map.of("input", "2 7", "output", "0 1")));
+        request.setTimeLimit(1000);
+        request.setMemoryLimit(256);
+        request.setDifficulty(1);
+        request.setJudgeMode(0);
+        request.setStatus(0);
+        return request;
     }
 
     private ProblemVersion publishedVersion(
@@ -284,16 +393,18 @@ class ProblemVersionPublishingTest {
         version.setId(id);
         version.setProblemId(11L);
         version.setState("PUBLISHED");
+        version.setProjectionComplete(true);
         version.setStatementJson("""
                 {"title":"%s","description":"Published statement","inputDescription":"Published input",
-                 "outputDescription":"Published output","hints":[],"samples":[],"source":"published-source"}
+                 "outputDescription":"Published output","hints":[],"samples":[],
+                 "source":"published-source","tags":[]}
                 """.formatted(title));
         version.setLimitsJson("""
                 {"timeLimit":%d,"memoryLimit":%d,"totalScore":%d}
                 """.formatted(timeLimit, memoryLimit, totalScore));
         version.setJudgeConfigJson("""
                 {"specialJudge":false,"specialJudgeCode":null,"specialJudgeLanguage":null,
-                 "judgeMode":%d,"difficulty":%d}
+                 "judgeMode":%d,"checker":"exact","difficulty":%d}
                 """.formatted(judgeMode, difficulty));
         return version;
     }

@@ -5,6 +5,7 @@ import com.zephyr.croj.announcement.AnnouncementApiException;
 import com.zephyr.croj.announcement.AnnouncementService;
 import com.zephyr.croj.common.response.Result;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -29,6 +30,7 @@ import org.springframework.web.bind.annotation.RestController;
 @Validated
 @PreAuthorize("hasRole('ADMIN') or hasRole('SUPER_ADMIN')")
 @Tag(name = "Announcement administration", description = "Global announcement lifecycle management")
+@SecurityRequirement(name = "Bearer Authentication")
 public class AdminAnnouncementController {
     private final AnnouncementService announcements;
     private final HttpServletRequest request;

@@ -82,11 +82,6 @@ public class ProblemVO implements Serializable {
     private Boolean isSpecialJudge;
 
     /**
-     * 特判代码
-     */
-    private String specialJudgeCode;
-
-    /**
      * 特判代码语言
      */
     private String specialJudgeLanguage;

@@ -24,8 +24,12 @@
     </select>
 
     <!-- 批量查询题目关联的标签 -->
-    <select id="getTagsByProblemIds" resultType="com.zephyr.croj.model.entity.ProblemTag">
-        SELECT t.*, r.problem_id
+    <select id="getTagsByProblemIds" resultType="com.zephyr.croj.model.projection.ProblemTagProjection">
+        SELECT
+          r.problem_id AS problemId,
+          t.id AS tagId,
+          t.name AS name,
+          t.color AS color
         FROM t_problem_tag t
         INNER JOIN t_problem_tag_relation r ON t.id = r.tag_id
         WHERE r.problem_id IN
@@ -33,6 +37,6 @@
             #{problemId}
         </foreach>
         AND t.is_deleted = 0
-        ORDER BY t.id
+        ORDER BY r.problem_id, t.id
     </select>
 </mapper>

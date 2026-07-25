@@ -12,6 +12,7 @@ import com.zephyr.croj.model.vo.ForumCommentVO;
 import com.zephyr.croj.model.vo.ForumPostVO;
 import com.zephyr.croj.service.CommunityContentService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -58,6 +59,7 @@ public class ForumController {
 
     @PostMapping("/posts")
     @Operation(summary = "发布帖子")
+    @SecurityRequirement(name = "Bearer Authentication")
     public Result<Long> createPost(@RequestBody @Valid CreateForumPostDTO body) {
         return Result.success("发布成功", content.createPost(body, actorId()));
     }
@@ -70,6 +72,7 @@ public class ForumController {
 
     @DeleteMapping("/posts/{postId}")
     @Operation(summary = "删除自己的帖子；管理员可执行内容治理")
+    @SecurityRequirement(name = "Bearer Authentication")
     public Result<Void> deletePost(@PathVariable @Positive Long postId) {
         content.deletePost(postId, actorId());
         return Result.success();
@@ -86,6 +89,7 @@ public class ForumController {
 
     @PostMapping("/posts/{postId}/comments")
     @Operation(summary = "发表评论或回复")
+    @SecurityRequirement(name = "Bearer Authentication")
     public Result<Long> createComment(
             @PathVariable @Positive Long postId,
             @RequestBody @Valid CreateForumCommentDTO body) {
@@ -94,6 +98,7 @@ public class ForumController {
 
     @DeleteMapping("/comments/{commentId}")
     @Operation(summary = "删除自己的评论；管理员可执行内容治理")
+    @SecurityRequirement(name = "Bearer Authentication")
     public Result<Void> deleteComment(@PathVariable @Positive Long commentId) {
         content.deleteComment(commentId, actorId());
         return Result.success();

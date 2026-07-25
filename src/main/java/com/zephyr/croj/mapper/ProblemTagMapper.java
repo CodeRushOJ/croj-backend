@@ -2,6 +2,7 @@ package com.zephyr.croj.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.zephyr.croj.model.entity.ProblemTag;
+import com.zephyr.croj.model.projection.ProblemTagProjection;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -27,5 +28,5 @@ public interface ProblemTagMapper extends BaseMapper<ProblemTag> {
      * @param problemIds 题目ID列表
      * @return 题目ID到标签列表的映射
      */
-    List<ProblemTag> getTagsByProblemIds(@Param("problemIds") List<Long> problemIds);
+    List<ProblemTagProjection> getTagsByProblemIds(@Param("problemIds") List<Long> problemIds);
 }

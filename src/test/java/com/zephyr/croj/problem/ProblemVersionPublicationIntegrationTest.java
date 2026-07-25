@@ -37,12 +37,15 @@ import org.springframework.test.context.jdbc.Sql;
         "DROP TABLE IF EXISTS t_problem_version",
         "DROP TABLE IF EXISTS t_problem",
         "DROP TABLE IF EXISTS t_submission",
+        "DROP TABLE IF EXISTS t_problem_tag_relation",
         "CREATE TABLE t_problem (id BIGINT PRIMARY KEY, status INT NOT NULL, published_version_id BIGINT, is_deleted INT NOT NULL DEFAULT 0)",
-        "CREATE TABLE t_problem_version (id BIGINT PRIMARY KEY, problem_id BIGINT NOT NULL, state VARCHAR(20) NOT NULL, published_at TIMESTAMP)",
+        "CREATE TABLE t_problem_version (id BIGINT PRIMARY KEY, problem_id BIGINT NOT NULL, state VARCHAR(20) NOT NULL, statement_json CLOB, limits_json CLOB, judge_config_json CLOB, published_at TIMESTAMP, projection_complete BOOLEAN NOT NULL)",
         "CREATE TABLE t_test_bundle (id BIGINT PRIMARY KEY, problem_version_id BIGINT NOT NULL UNIQUE, object_key VARCHAR(512), sha256 CHAR(64), size_bytes BIGINT, manifest_json CLOB)",
         "CREATE TABLE t_submission (id BIGINT PRIMARY KEY, problem_id BIGINT NOT NULL, user_id BIGINT NOT NULL, status INT NOT NULL, is_deleted INT NOT NULL DEFAULT 0)",
+        "CREATE TABLE t_problem_tag_relation (problem_id BIGINT NOT NULL, tag_id BIGINT NOT NULL, PRIMARY KEY(problem_id,tag_id))",
         "INSERT INTO t_problem VALUES (42,1,NULL,0)",
-        "INSERT INTO t_problem_version VALUES (101,42,'DRAFT',NULL)"
+        "INSERT INTO t_problem_version VALUES (101,42,'DRAFT','{\"title\":\"A\",\"description\":\"D\",\"inputDescription\":\"I\",\"outputDescription\":\"O\",\"hints\":[],\"samples\":[],\"source\":null,\"tags\":[{\"id\":5,\"name\":\"published\",\"color\":\"#111111\"}]}','{\"timeLimit\":1000,\"memoryLimit\":64,\"totalScore\":100}','{\"judgeMode\":0,\"specialJudge\":false,\"specialJudgeCode\":null,\"specialJudgeLanguage\":null,\"checker\":\"exact\",\"difficulty\":2}',NULL,TRUE)",
+        "INSERT INTO t_problem_tag_relation VALUES (42,9)"
 })
 class ProblemVersionPublicationIntegrationTest {
     @Autowired private JdbcTemplate jdbc;
@@ -61,7 +64,8 @@ class ProblemVersionPublicationIntegrationTest {
 
     @Test
     void atomicallyPublishesAJudgeReadyVersionAndSwitchesTheProblemPointer() {
-        jdbc.update("INSERT INTO t_test_bundle VALUES (7,101,'test-bundles/42/101/a.zip',REPEAT('a',64),12,'{}')");
+        jdbc.update("INSERT INTO t_test_bundle VALUES (7,101,'test-bundles/42/101/a.zip',REPEAT('a',64),12,?)",
+                validManifest());
         ProblemVersionPublicationService service = new ProblemVersionPublicationService(jdbc);
 
         service.publish(42L, 101L);
@@ -71,6 +75,78 @@ class ProblemVersionPublicationIntegrationTest {
         assertEquals(101L, jdbc.queryForObject(
                 "SELECT published_version_id FROM t_problem WHERE id=42", Long.class));
         assertEquals(0, jdbc.queryForObject("SELECT status FROM t_problem WHERE id=42", Integer.class));
+    }
+
+    @Test
+    void refusesToPublishAManuallyAttachedOiBundle() {
+        jdbc.update(
+                "UPDATE t_problem_version SET judge_config_json='{\"judgeMode\":1,\"specialJudge\":false,\"checker\":\"exact\"}' WHERE id=101");
+        jdbc.update(
+                "INSERT INTO t_test_bundle VALUES (7,101,'test-bundles/42/101/a.zip',REPEAT('a',64),12,?)",
+                validManifest());
+        ProblemVersionPublicationService service = new ProblemVersionPublicationService(jdbc);
+
+        assertThrows(BusinessException.class, () -> service.publish(42L, 101L));
+
+        assertEquals("DRAFT", jdbc.queryForObject(
+                "SELECT state FROM t_problem_version WHERE id=101", String.class));
+        assertNull(jdbc.queryForObject(
+                "SELECT published_version_id FROM t_problem WHERE id=42", Long.class));
+    }
+
+    @Test
+    void refusesToPublishAManuallyAttachedManifestWithoutCases() {
+        jdbc.update(
+                "INSERT INTO t_test_bundle VALUES (7,101,'test-bundles/42/101/a.zip',REPEAT('a',64),12,?)",
+                """
+                {"judgeMode":"ACM","checker":"exact",
+                 "limits":{"timeLimitMillis":1000,"memoryLimitMiB":64}}
+                """);
+        ProblemVersionPublicationService service = new ProblemVersionPublicationService(jdbc);
+
+        assertThrows(BusinessException.class, () -> service.publish(42L, 101L));
+
+        assertEquals("DRAFT", jdbc.queryForObject(
+                "SELECT state FROM t_problem_version WHERE id=101", String.class));
+        assertNull(jdbc.queryForObject(
+                "SELECT published_version_id FROM t_problem WHERE id=42", Long.class));
+        assertEquals(
+                List.of(9L),
+                jdbc.queryForList(
+                        "SELECT tag_id FROM t_problem_tag_relation WHERE problem_id=42 ORDER BY tag_id",
+                        Long.class));
+    }
+
+    @Test
+    void refusesACompleteFlagWhenThePublicProjectionIsStructurallyIncomplete() {
+        jdbc.update("UPDATE t_problem_version SET statement_json='{\"tags\":[]}' WHERE id=101");
+        jdbc.update(
+                "INSERT INTO t_test_bundle VALUES (7,101,'test-bundles/42/101/a.zip',REPEAT('a',64),12,?)",
+                validManifest());
+        ProblemVersionPublicationService service = new ProblemVersionPublicationService(jdbc);
+
+        assertThrows(BusinessException.class, () -> service.publish(42L, 101L));
+
+        assertEquals("DRAFT", jdbc.queryForObject(
+                "SELECT state FROM t_problem_version WHERE id=101", String.class));
+        assertNull(jdbc.queryForObject(
+                "SELECT published_version_id FROM t_problem WHERE id=42", Long.class));
+    }
+
+    @Test
+    void publicationAtomicallySwitchesVisibleTagRelationsToTheVersionSnapshot() {
+        jdbc.update(
+                "INSERT INTO t_test_bundle VALUES (7,101,'test-bundles/42/101/a.zip',REPEAT('a',64),12,?)",
+                validManifest());
+        ProblemVersionPublicationService service = new ProblemVersionPublicationService(jdbc);
+
+        service.publish(42L, 101L);
+
+        assertEquals(
+                List.of(5L),
+                jdbc.queryForList(
+                        "SELECT tag_id FROM t_problem_tag_relation WHERE problem_id=42 ORDER BY tag_id",
+                        Long.class));
     }
 
     @Test
@@ -87,7 +163,17 @@ class ProblemVersionPublicationIntegrationTest {
                         any(RowMapper.class),
                         eq(101L),
                         eq(42L)))
-                .thenReturn(List.of("PUBLISHED"));
+                .thenReturn(List.of(new ProblemVersionPublicationService.PublicationCandidate(
+                        "PUBLISHED",
+                        "{\"title\":\"A\",\"description\":\"D\",\"inputDescription\":\"I\","
+                                + "\"outputDescription\":\"O\",\"hints\":[],\"samples\":[],"
+                                + "\"source\":null,\"tags\":[]}",
+                        "{\"timeLimit\":1000,\"memoryLimit\":64,\"totalScore\":100}",
+                        "{\"judgeMode\":0,\"specialJudge\":false,\"specialJudgeCode\":null,"
+                                + "\"specialJudgeLanguage\":null,\"checker\":\"exact\","
+                                + "\"difficulty\":2}",
+                        true,
+                        validManifest())));
         when(mockedJdbc.update(any(String.class), anyLong(), anyLong())).thenReturn(1);
         ProblemVersionPublicationService service = new ProblemVersionPublicationService(mockedJdbc);
 
@@ -121,5 +207,14 @@ class ProblemVersionPublicationIntegrationTest {
 
         jdbc.update("INSERT INTO t_submission VALUES (2,42,7,1,0)");
         assertEquals(1, jdbc.queryForObject(sql, Integer.class, 42L, 7L));
+    }
+
+    private String validManifest() {
+        return """
+                {"schemaVersion":1,"judgeMode":"ACM","checker":"exact",
+                 "limits":{"timeLimitMillis":1000,"memoryLimitMiB":64},"cases":[
+                  {"id":"1","input":"cases/1.in","output":"cases/1.out","weight":1}
+                ]}
+                """;
     }
 }

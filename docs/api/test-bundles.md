@@ -44,28 +44,40 @@ AWS S3 可省略 `TEST_BUNDLE_S3_ENDPOINT` 并按部署区域设置 `AWS_REGION`
 }
 ```
 
-这是 Backend 与 Judging Server 共用的严格 v1 契约：只接受 `schemaVersion=1`、`judgeMode=ACM`、`checker=exact|token`；`limits` 的时间和内存必须为正整数，并与绑定的不可变 `ProblemVersion.limits_json` 完全一致；`cases` 不得为空，字符串 ID 必须匹配 `[A-Za-z0-9][A-Za-z0-9._-]{0,63}` 且唯一；ACM 权重必须为 `1`；输入输出路径必须是 `cases/` 下的安全相对路径且互不重复。未知字段会被拒绝。
+这是 Backend 与 Judging Server 共用的严格 v1 契约：只接受 `schemaVersion=1`、`judgeMode=ACM`、`checker=exact|token`；绑定的不可变 `ProblemVersion` 必须 `projection_complete=1`、`judgeMode=0`、`specialJudge=false`，而且版本 checker 必须与 manifest 相同；`limits` 的时间和内存必须为正整数，并与版本 `limits_json` 完全一致；`cases` 不得为空，字符串 ID 必须匹配 `[A-Za-z0-9][A-Za-z0-9._-]{0,63}` 且唯一；ACM 权重必须为 `1`；输入输出路径必须是 `cases/` 下的安全相对路径且互不重复。未知字段会被拒绝。
+
+attach 会在访问对象存储之前执行上述双边合同校验；publish 会重新读取数据库中的版本和 manifest 再校验一次。因此 OI、SPJ、checker 不一致、不完整历史版本和手工插入的 TestBundle 都会失败关闭。上传阶段通过管理 API 返回稳定 422，发布阶段返回稳定 409；管理端应修正版本配置或创建新的完整草稿，不能重试绕过。
 
 ZIP 根目录必须含且只含一个 `manifest.json`，其规范化结构必须与数据库 `manifest_json` 完全一致；其余文件必须恰好是 manifest 引用的测试输入输出。`TestBundleService` 是最终信任边界：它只采用与 Judging Server 相同的中央目录视图，不再依赖可被截断或伪造的 local-header-only 视图，并拒绝加密、symlink/非普通文件、不支持的压缩方法、路径穿越、重复/未声明/缺失文件、manifest 不一致、非法 UTF-8、单文件或总解压大小超限；每个 entry 还会独立校验压缩比、CRC 与声明大小。Backend 最多接受 256 个测试点；manifest 上限为 1 MiB，单文件和整个 bundle 的展开预算均为 63 MiB，压缩比阈值为 200。这为 Judging Server 的 64 MiB batch wire 上限保留至少 1 MiB 给源码和协议开销。FPS 解析器还会独立限制题目数、文本、测试点、内嵌图片并禁止 DTD/XXE 和网络访问。
 
 ## Publication flow
 
-1. 创建题目与不可变 `ProblemVersion(DRAFT)`。
+1. 创建题目与不可变 `ProblemVersion(DRAFT)`，在 `statement_json.tags` 冻结有序 `{id,name,color}` 标签，并将 `projection_complete` 设为真。
 2. 解析器规范化测试文件，生成 canonical v1 manifest，并把同一 JSON 写入 ZIP 根目录 `manifest.json`。
 3. `TestBundleService` 校验限制，计算 SHA-256，并写入内容寻址的私有对象。
 4. 写入唯一的 `t_test_bundle.problem_version_id` 元数据。
-5. `ProblemVersionPublicationService` 先锁定题目聚合行，再锁定版本与测试包，原子更新版本为 `PUBLISHED`、题目 `published_version_id` 和公开状态。
+5. `ProblemVersionPublicationService` 先锁定题目聚合行，再锁定版本与测试包，重新验证 v1 双边合同，然后原子更新版本为 `PUBLISHED`、题目 `published_version_id`、公开状态和可见标签关系。
 
 对象写入成功、数据库事务失败时可能留下不可达的内容寻址对象，后续可由 GC 清理；系统不会因此产生已发布但不可判的版本。
 
 `t_problem` 始终保存管理端最新草稿，公开详情、题号查询和列表则以
 `published_version_id` 指向的 `ProblemVersion` 为展示快照；标题搜索、难度过滤和分页总数也按该快照计算。
-因此编辑已发布题目不会提前泄漏新题面或限制，只有上述原子指针切换才会改变公开内容。新快照包含
-`source` 与 `difficulty`，V11 会为 V3 等历史版本补齐这两个投影字段。
+因此编辑已发布题目不会提前泄漏新题面、限制或标签，公开标签筛选也只解析已发布版本自己的快照；只有上述原子指针切换才会改变公开内容。新快照包含 `source`、`tags`、`difficulty` 和 `checker`。V11 不会拿当前草稿回填历史版本：自身缺少任一公开投影字段的版本会保持原 JSON、标记为不完整，并从公开题目指针撤下。审计与恢复流程见 [`../migrations/V11-problem-version-projections.md`](../migrations/V11-problem-version-projections.md)。
 
 ## 管理端导入 API
 
 以下接口都要求 `ADMIN` 或 `SUPER_ADMIN`。
+
+### 审计不可变 checker source
+
+公共题目 DTO 永远不序列化 `specialJudgeCode`。管理员需要排查某个历史或草稿版本时，必须显式读取该版本的私有判题配置：
+
+```http
+GET /api/v1/admin/problems/{problemId}/versions/{versionId}/source
+Authorization: Bearer <admin-jwt>
+```
+
+响应包含版本号、状态、是否 SPJ、checker source、语言和判题模式。未知版本或版本不属于题目返回 404；普通用户返回 403，匿名请求返回 401。该接口只读不可变版本，不会回退到当前 `t_problem` 草稿。
 
 ### 为单个草稿版本上传测试包
 

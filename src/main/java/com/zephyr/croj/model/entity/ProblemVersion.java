@@ -23,4 +23,5 @@ public class ProblemVersion {
     private LocalDateTime createdAt;
     @TableField("published_at")
     private LocalDateTime publishedAt;
+    private Boolean projectionComplete;
 }

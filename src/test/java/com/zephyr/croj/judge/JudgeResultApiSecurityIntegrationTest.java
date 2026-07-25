@@ -109,4 +109,18 @@ class JudgeResultApiSecurityIntegrationTest {
 
         verifyNoInteractions(results);
     }
+
+    @Test
+    void incompleteOIScoreIsRejectedBeforeTheServiceLayer() throws Exception {
+        String invalid = VALID_BODY.replace(
+                "\"memoryUsedKb\":2048", "\"memoryUsedKb\":2048,\"score\":70");
+
+        mvc.perform(post(ENDPOINT)
+                        .header(JudgeServiceTokenFilter.TOKEN_HEADER, TOKEN)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(invalid))
+                .andExpect(status().isBadRequest());
+
+        verifyNoInteractions(results);
+    }
 }

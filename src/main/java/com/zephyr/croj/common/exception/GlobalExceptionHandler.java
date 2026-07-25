@@ -5,6 +5,7 @@ import com.zephyr.croj.common.enums.ResultCodeEnum;
 import com.zephyr.croj.common.response.Result;
 import com.zephyr.croj.contest.ContestApiException;
 import com.zephyr.croj.problem.importer.ProblemPackageParseException;
+import com.zephyr.croj.problem.TestBundleApiException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -19,6 +20,7 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
@@ -43,6 +45,20 @@ public class GlobalExceptionHandler {
         log.warn("比赛请求失败: {}", exception.getMessage());
         return ResponseEntity.status(exception.getStatus())
                 .body(Result.error(exception.getStatus().value() * 100, exception.getMessage()));
+    }
+
+    @ExceptionHandler(TestBundleApiException.class)
+    public ResponseEntity<Result<Void>> handleTestBundleApiException(TestBundleApiException exception) {
+        log.warn("TestBundle request failed: {}", exception.getMessage());
+        return ResponseEntity.status(exception.getStatus())
+                .body(Result.error(exception.getStatus().value() * 100, exception.getMessage()));
+    }
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<Result<Void>> handleMaxUploadSizeExceeded(MaxUploadSizeExceededException exception) {
+        log.warn("Multipart upload exceeded the configured limit");
+        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
+                .body(Result.error(41300, "uploaded archive exceeds the configured request limit"));
     }
 
     @ExceptionHandler(JudgeResultConflictException.class)

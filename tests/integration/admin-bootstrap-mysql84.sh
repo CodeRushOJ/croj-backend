@@ -82,7 +82,7 @@ write_environment() {
     local username="$3"
     local email="$4"
     local admin_password="$5"
-    local database_url="${6:-jdbc:mysql://mysql:3306/${database}?useUnicode=true&characterEncoding=utf8&serverTimezone=UTC&useSSL=false&allowPublicKeyRetrieval=true}"
+    local database_url="${6:-jdbc:mysql://mysql:3306/${database}?useUnicode=true&characterEncoding=utf8&serverTimezone=UTC&forceConnectionTimeZoneToSession=true&useSSL=false&allowPublicKeyRetrieval=true}"
 
     umask 077
     {
@@ -125,7 +125,8 @@ docker run --detach --rm \
     --env "MYSQL_PASSWORD=$database_password" \
     "$mysql_image" \
     --character-set-server=utf8mb4 \
-    --collation-server=utf8mb4_0900_ai_ci >/dev/null
+    --collation-server=utf8mb4_0900_ai_ci \
+    --default-time-zone=+08:00 >/dev/null
 
 mysql_ready=false
 for _ in {1..90}; do
@@ -147,6 +148,8 @@ mysql_version="$(docker exec \
     mysql --protocol TCP --host 127.0.0.1 \
     --batch --skip-column-names --user root --execute 'SELECT VERSION()')"
 [[ "$mysql_version" == 8.4.* ]] || fail "expected MySQL 8.4, got $mysql_version"
+assert_equal "+08:00" "$(mysql_query "$primary_database" "SELECT @@session.time_zone")" \
+    "MySQL test precondition did not use a non-UTC session"
 
 docker exec \
     --env "MYSQL_PWD=$mysql_root_password" \
@@ -188,6 +191,9 @@ assert_equal "1" "$(mysql_query "$primary_database" \
 assert_equal "1" "$(mysql_query "$primary_database" \
     "SELECT COUNT(*) FROM t_system_bootstrap_lock WHERE administrator_id IS NOT NULL AND administrator_username = 'admin' AND administrator_email = 'admin@coderushoj.test'")" \
     "the one-shot guard was not claimed"
+assert_equal "1" "$(mysql_query "$primary_database" \
+    "SELECT ABS(TIMESTAMPDIFF(SECOND, create_time, UTC_TIMESTAMP(3))) <= 30 FROM t_user WHERE username = 'admin'")" \
+    "bootstrap CURRENT_TIMESTAMP did not use UTC when the MySQL server default was non-UTC"
 first_hash="$(mysql_query "$primary_database" "SELECT password FROM t_user WHERE username = 'admin'")"
 [[ "$first_hash" == "\$2a\$"* || "$first_hash" == "\$2b\$"* || "$first_hash" == "\$2y\$"* ]] \
     || fail "the administrator password is not BCrypt"

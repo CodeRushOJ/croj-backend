@@ -8,7 +8,7 @@ spring:
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
     # Keep JDBC sessions on the same UTC timeline as Java Instant and MySQL CURRENT_TIMESTAMP.
-    url: ${DATABASE_URL:jdbc:mysql://localhost:3306/code_rush_oj?useUnicode=true&characterEncoding=utf8&serverTimezone=UTC&useSSL=false}
+    url: ${DATABASE_URL:jdbc:mysql://localhost:3306/code_rush_oj?useUnicode=true&characterEncoding=utf8&serverTimezone=UTC&forceConnectionTimeZoneToSession=true&useSSL=false}
     username: ${DATABASE_USERNAME:coderushoj}
     password: ${DATABASE_PASSWORD}
   data:

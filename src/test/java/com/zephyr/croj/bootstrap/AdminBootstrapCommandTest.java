@@ -147,7 +147,8 @@ class AdminBootstrapCommandTest {
         environment.put(
                 "DATABASE_URL",
                 "jdbc:mysql://mysql:3306/code_rush_oj"
-                        + "?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false");
+                        + "?useUnicode=true&characterEncoding=utf8&serverTimezone=UTC"
+                        + "&forceConnectionTimeZoneToSession=true&useSSL=false");
         AtomicInteger calls = new AtomicInteger();
 
         int code = AdminBootstrapCommand.run(

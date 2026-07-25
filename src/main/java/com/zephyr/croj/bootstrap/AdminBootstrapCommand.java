@@ -22,6 +22,7 @@ public final class AdminBootstrapCommand {
             "characterencoding",
             "connecttimeout",
             "enabledtlsprotocols",
+            "forceconnectiontimezonetosession",
             "requiressl",
             "servertimezone",
             "sockettimeout",

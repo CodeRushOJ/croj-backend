@@ -15,7 +15,7 @@
 | `BOOTSTRAP_ADMIN_EMAIL` | 唯一邮箱，最长 100 字符 |
 | `BOOTSTRAP_ADMIN_PASSWORD` | 至少 12 个 Unicode 字符且 UTF-8 编码不超过 72 bytes，只能来自 Secret |
 
-JDBC URL 只能使用 `jdbc:mysql://host[:port]/schema` 或逗号分隔的简单 host 列表。命令拒绝 userinfo、Connector/J `address=(...)`/`(host=...)` descriptor、分号属性和未知 query 参数，避免 Flyway 或驱动日志泄露凭据。当前 query allowlist 为 `useUnicode`、`characterEncoding`、`serverTimezone`、`useSSL`、`sslMode`、`allowPublicKeyRetrieval`、`connectTimeout`、`socketTimeout`、`tcpKeepAlive`、`enabledTLSProtocols`、`verifyServerCertificate`、`requireSSL`；数据库用户名和密码必须使用独立变量。
+JDBC URL 只能使用 `jdbc:mysql://host[:port]/schema` 或逗号分隔的简单 host 列表。命令拒绝 userinfo、Connector/J `address=(...)`/`(host=...)` descriptor、分号属性和未知 query 参数，避免 Flyway 或驱动日志泄露凭据。当前 query allowlist 为 `useUnicode`、`characterEncoding`、`serverTimezone`、`forceConnectionTimeZoneToSession`、`useSSL`、`sslMode`、`allowPublicKeyRetrieval`、`connectTimeout`、`socketTimeout`、`tcpKeepAlive`、`enabledTLSProtocols`、`verifyServerCertificate`、`requireSSL`；数据库用户名和密码必须使用独立变量。
 
 命令先执行全部 Flyway 迁移，再锁定 V9 的 `first-super-admin` guard 行。没有任何超级管理员或身份冲突时，在同一事务中创建启用、已验证的超级管理员，把其 ID、用户名和邮箱写入 guard，并写入 `SYSTEM_BOOTSTRAP_SUPER_ADMIN` 审计事件。guard 一经声明不可换绑：同一身份重跑会成功退出但不会修改密码；任何其他身份、普通账号、禁用账号或软删除账号冲突都失败退出。升级旧库时，只要 guard 尚未认领但数据库已经存在任意 `SUPER_ADMIN`，命令也会失败关闭，绝不静默收编或修改旧账号；运维人员必须先审计并通过独立迁移流程处理历史权限。
 

@@ -67,7 +67,7 @@ class ConfigurationSecurityTest {
     }
 
     @Test
-    void jdbcDefaultsMustUseUtcForDatabaseAndJavaInstantConsistency() throws IOException {
+    void jdbcDefaultsMustForceUtcSessionsForDatabaseAndJavaInstantConsistency() throws IOException {
         String application = Files.readString(RESOURCES.resolve("application.yml"));
         String environmentExample = Files.readString(Path.of(".env.example"));
 
@@ -75,6 +75,9 @@ class ConfigurationSecurityTest {
             assertTrue(
                     configuration.contains("serverTimezone=UTC"),
                     "JDBC sessions must use UTC so MySQL CURRENT_TIMESTAMP and Java Instant share one timeline");
+            assertTrue(
+                    configuration.contains("forceConnectionTimeZoneToSession=true"),
+                    "Connector/J must set MySQL @@session.time_zone instead of only interpreting values as UTC");
             assertFalse(configuration.contains("serverTimezone=Asia/Shanghai"));
         }
     }

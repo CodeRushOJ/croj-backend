@@ -26,6 +26,8 @@ class MigrationContractTest {
             "src", "main", "resources", "db", "migration", "V7__forum_resource_associations.sql");
     private static final Path PROBLEM_IMPORT_JOBS = Path.of(
             "src", "main", "resources", "db", "migration", "V8__problem_import_jobs.sql");
+    private static final Path ADMIN_BOOTSTRAP_GUARD = Path.of(
+            "src", "main", "resources", "db", "migration", "V9__admin_bootstrap_guard.sql");
 
     @Test
     void cleanSchemaCoversTheCompleteFreeOjDomain() throws IOException {
@@ -142,5 +144,18 @@ class MigrationContractTest {
         assertTrue(sql.contains("`expires_at` datetime(3)"));
         assertTrue(sql.contains("`imported_count` int"));
         assertTrue(sql.contains("idx_problem_import_expiry"));
+    }
+
+    @Test
+    void administratorBootstrapUsesAForwardOnlyTransactionalGuard() throws IOException {
+        assertTrue(Files.isRegularFile(ADMIN_BOOTSTRAP_GUARD));
+        String sql = Files.readString(ADMIN_BOOTSTRAP_GUARD).toLowerCase();
+        assertTrue(sql.contains("create table `t_system_bootstrap_lock`"));
+        assertTrue(sql.contains("primary key (`name`)"));
+        assertTrue(sql.contains("`administrator_id` bigint"));
+        assertTrue(sql.contains("`administrator_username` varchar(50)"));
+        assertTrue(sql.contains("`administrator_email` varchar(100)"));
+        assertTrue(sql.contains("`claimed_at` datetime(3)"));
+        assertTrue(sql.contains("'first-super-admin'"));
     }
 }

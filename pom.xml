@@ -20,6 +20,9 @@
         <jwt.version>0.12.7</jwt.version>
         <rocketmq.version>2.3.6</rocketmq.version>
         <springdoc.version>2.8.17</springdoc.version>
+        <!-- Explicit pins shared by runtime Flyway and scripts/migration-gate. -->
+        <flyway.version>11.7.2</flyway.version>
+        <mysql.version>9.7.0</mysql.version>
     </properties>
 
     <dependencies>

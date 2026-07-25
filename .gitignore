@@ -1,6 +1,7 @@
 HELP.md
 target/
 .m2/
+.cache/
 .env
 .env.*
 !.env.example

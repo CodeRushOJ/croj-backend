@@ -14,10 +14,46 @@ Spring Boot 业务 API，当前覆盖身份、用户、题目、标签、提交�
 - `REDIS_PASSWORD`
 - `JWT_SECRET`（至少 32 个随机字节）
 - `JUDGE_RESULT_SERVICE_TOKEN`（至少 32 个随机字节，仅判题服务与后端持有）
-- `SMTP_PASSWORD`
 - `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`（MinIO/S3 私有隐藏测试桶）
 
-数据库地址、用户名、SMTP 和 RocketMQ 地址也可以通过 `.env.example` 中的变量覆盖。`.env` 与 `.env.*` 默认被 Git 忽略，`.env.example` 只保留无效占位值。
+数据库地址、用户名、SMTP 和 RocketMQ 地址也可以通过 `.env.example` 中的变量覆盖。`.env` 与 `.env.*` 默认被 Git 忽略，`.env.example` 只保留本地开发值或无效占位值。
+
+## SMTP 邮件配置
+
+SMTP 传输完全由环境变量控制，不在镜像内固定认证或 TLS 模式。默认值适用于本机 Mailpit 的明文 SMTP（Web UI 通常为 `http://localhost:8025`）：
+
+```dotenv
+SMTP_HOST=localhost
+SMTP_PORT=1025
+SMTP_USERNAME=noreply@coderushoj.local
+SMTP_PASSWORD=
+SMTP_AUTH=false
+SMTP_STARTTLS=false
+SMTP_SSL=false
+```
+
+使用 587 端口的生产 SMTP 通常开启认证和 STARTTLS：
+
+```dotenv
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_USERNAME=replace-with-smtp-account
+SMTP_PASSWORD=replace-with-smtp-authorization-code
+SMTP_AUTH=true
+SMTP_STARTTLS=true
+SMTP_SSL=false
+```
+
+如果供应商要求 465 隐式 TLS，则使用：
+
+```dotenv
+SMTP_PORT=465
+SMTP_AUTH=true
+SMTP_STARTTLS=false
+SMTP_SSL=true
+```
+
+生产 TLS 模式下 `SMTP_STARTTLS` 与 `SMTP_SSL` 二选一，不能同时开启；Mailpit 明文模式应同时关闭。在 Docker Compose 或 Kubernetes 中运行后端时，把 `SMTP_HOST` 改为 Mailpit 的 Service 名称。未启用认证时 `SMTP_PASSWORD` 可以留空，`SMTP_USERNAME` 仍建议使用合法发件地址。
 
 ## 数据库迁移与判题投递
 
@@ -51,7 +87,6 @@ docker run --rm \
   -e REDIS_PASSWORD=test-only \
   -e JWT_SECRET=test-only-secret-with-at-least-32-bytes \
   -e JUDGE_RESULT_SERVICE_TOKEN=test-only-judge-result-token-at-least-32-bytes \
-  -e SMTP_PASSWORD=test-only \
   -v "$PWD:/workspace" \
   -v coderushoj-maven-cache:/root/.m2 \
   -w /workspace eclipse-temurin:17-jdk \

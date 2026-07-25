@@ -182,7 +182,7 @@ trivy image --severity HIGH,CRITICAL --exit-code 1 coderushoj/croj-backend:local
 
 Trivy 不使用 `--ignore-unfixed` 或默认 ignore file；任何 HIGH/CRITICAL 都必须在升级依赖或基础镜像后重新验证，不能通过把 exit code 改成 0 绕过。CI 同时上传 SARIF 和 SPDX artifact，并以阻断扫描作为最终结果。
 
-Pull Request 和分支构建只生成可下载、保留 7 天的 attested OCI archive，不向 registry 发布。推送经过 GitHub 验证的 `vX.Y.Z` 签名 tag 后，工作流才会登录 GHCR，并在全部 Java、镜像合同、SBOM 和 Trivy 门禁通过后发布 `linux/amd64`、`linux/arm64` 双架构镜像。发布同时生成版本 tag 和不可变 `sha-<full-commit-sha>` tag，从 registry 取得 digest 后再更新平台 source lock；不发布或部署 `latest`。
+Pull Request 和分支构建只生成可下载、保留 7 天的 attested OCI archive，不向 registry 发布。推送指向当前 commit 的 annotated `vX.Y.Z` tag 后，工作流才会登录 GHCR，并在全部 Java、镜像合同、SBOM 和 Trivy 门禁通过后发布 `linux/amd64`、`linux/arm64` 双架构镜像。发布同时生成版本 tag 和不可变 `sha-<full-commit-sha>` tag，并用 GitHub OIDC 为 registry digest 生成 keyless build provenance；平台取得 digest 后再更新 source lock，不发布或部署 `latest`。
 
 ### Kubernetes 运行合同
 

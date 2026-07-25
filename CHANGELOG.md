@@ -8,7 +8,7 @@
 
 - 判题回传与提交状态模型原生支持 `OUTPUT_LIMIT_EXCEEDED`（code 8）；ACM 榜将 OLE 计为选手失败，显式终态集合仍排除 `SYSTEM_ERROR`。
 - Backend→Judging TestBundle v1/v2 CI 契约固定到最终已评审 Judge 提交，并由仓库测试防止本地脚本、GitHub Actions 与 README 的 consumer SHA 再次漂移。
-- 签名 SemVer tag 发布在推送双架构 GHCR 镜像后导出 repository、tag、revision、manifest digest 与 platforms JSON，供平台生成 digest-only 生产发布清单。
+- Annotated SemVer tag 发布在推送双架构 GHCR 镜像后，通过 GitHub OIDC 为 manifest digest 生成 keyless provenance，并导出 repository、tag、revision、digest 与 platforms JSON，供平台生成 digest-only 生产发布清单。
 - OI 实时榜、冻结榜和最终榜：逐题取历史最高分，使用比赛固定分值校验上限，并以总分、得分题数、最后提分时间和用户 ID 生成确定性排名。
 - SMTP 环境配置同时支持本地 Mailpit 明文传输、生产 STARTTLS（587）和隐式 TLS（465），认证、TLS 与凭据不再硬编码。
 - 一次性首个超级管理员 bootstrap 模式：V9 持久化 identity guard、并发幂等创建、BCrypt 密码、审计事件和 Secret-only 生产镜像命令。
@@ -73,7 +73,7 @@
 - OpenAPI 明确记录 ACM/OI 排序、冻结区间、公开/管理员视图以及互斥字段语义；损坏或语义不完整的快照会自动丢弃并重建。
 - `prod` Profile 的 graceful shutdown phase timeout 固定为 30 秒，并将 multipart 临时目录与上传目录分别对齐 `/tmp`、`/app/uploads`。
 - 生产镜像工作流先在 Java 17 中运行完整 Maven 测试，测试失败时上传 Surefire 报告，镜像构建必须等待测试通过。
-- 经过 GitHub 验证的 `vX.Y.Z` 签名 tag 在全部门禁通过后发布 GHCR 双架构版本/commit 镜像；普通分支只保留短期 attested OCI artifact，不发布 `latest`。
+- 指向当前 commit 的 annotated `vX.Y.Z` tag 在全部门禁通过后发布 GHCR 双架构版本/commit 镜像与 GitHub OIDC provenance；普通分支只保留短期 attested OCI artifact，不发布 `latest`。
 - 管理端跨域预检允许 `If-Match`，浏览器现在可以调用公告等使用乐观并发控制的写接口。
 - v1 明确要求从全新 MySQL schema 执行 Flyway V1–V13；没有 Flyway history 的非空手工 `db.sql` 原型库不支持原地升级，历史数据必须走单独审计迁移。
 

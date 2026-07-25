@@ -51,14 +51,23 @@ class BuildModernizationTest {
     }
 
     @Test
-    void signedVersionTagsPublishImmutableMultiArchitectureImages() throws IOException {
+    void annotatedVersionTagsPublishOidcAttestedMultiArchitectureImages() throws IOException {
         String workflow = Files.readString(Path.of(".github", "workflows", "image.yml"));
 
         assertTrue(workflow.contains("packages: write"));
+        assertTrue(workflow.contains("id-token: write"));
         assertTrue(workflow.contains("docker/login-action@"));
         assertTrue(workflow.contains("github.ref_type == 'tag'"));
         assertTrue(workflow.contains(
                 "test \"$(git rev-parse \"$GITHUB_REF_NAME^{commit}\")\" = \"$GITHUB_SHA\""));
+        assertTrue(workflow.contains("git fetch --no-tags origin main"));
+        assertTrue(workflow.contains("test \"$GITHUB_SHA\" = \"$(git rev-parse origin/main)\""));
+        assertTrue(workflow.contains("docker/setup-qemu-action@"));
+        assertTrue(workflow.contains("actions/attest-build-provenance@"));
+        assertTrue(workflow.contains("subject-name: ghcr.io/coderushoj/croj-backend"));
+        assertTrue(workflow.contains("subject-digest: ${{ steps.push.outputs.digest }}"));
+        assertTrue(workflow.contains("push-to-registry: true"));
+        assertFalse(workflow.contains(".verification.verified"));
         assertTrue(workflow.contains("platforms: linux/amd64,linux/arm64"));
         assertTrue(workflow.contains("push: true"));
         assertTrue(workflow.contains("ghcr.io/coderushoj/croj-backend:${{ github.ref_name }}"));

@@ -104,6 +104,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET,
                                 "/v1/forum/**",
                                 "/v1/problems/*/solutions/**",
+                                "/v1/announcements",
+                                "/v1/announcements/**",
                                 "/v1/contests/**"
                         ).permitAll()
                         .requestMatchers(

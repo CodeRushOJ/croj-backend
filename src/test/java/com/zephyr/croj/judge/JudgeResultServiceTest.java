@@ -135,6 +135,38 @@ class JudgeResultServiceTest {
     }
 
     @Test
+    void acceptsScorelessInfrastructureFailureForAnOISubmission() {
+        JudgeResultRequest request = accepted("event-oi-system");
+        request.setStatus("SYSTEM_ERROR");
+        request.setExitCode(-1);
+        when(receipts.insertIgnore(any())).thenReturn(1);
+        when(submissions.selectById(99L)).thenReturn(pendingSubmission());
+        when(versions.selectById(101L)).thenReturn(oiVersion());
+        when(attempts.completeAttempt(anyLong(), anyInt(), anyString(), anyString())).thenReturn(1);
+        when(submissions.completePending(
+                        anyLong(),
+                        anyInt(),
+                        anyInt(),
+                        anyInt(),
+                        nullable(Integer.class),
+                        anyString(),
+                        anyString()))
+                .thenReturn(1);
+
+        assertEquals("APPLIED", service.ingest(request).disposition());
+        verify(submissions)
+                .completePending(
+                        eq(99L),
+                        eq(7),
+                        eq(12),
+                        eq(2048),
+                        org.mockito.ArgumentMatchers.isNull(),
+                        org.mockito.ArgumentMatchers.argThat(
+                                value -> value != null && !value.contains("\"score\"")),
+                        anyString());
+    }
+
+    @Test
     void rejectsScoresThatDisagreeWithTheImmutableJudgeMode() {
         JudgeResultRequest request = accepted("event-invalid-score");
         request.setScore(70);

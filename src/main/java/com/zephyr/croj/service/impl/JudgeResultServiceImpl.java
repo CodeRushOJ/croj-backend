@@ -144,6 +144,9 @@ public class JudgeResultServiceImpl implements JudgeResultService {
                 throw new JudgeResultConflictException("immutable judge score config is invalid");
             }
             int immutableTotal = limits.path("totalScore").intValue();
+            if (status == JudgeResultStatus.SYSTEM_ERROR && request.getScore() == null) {
+                return;
+            }
             if (request.getScore() == null
                     || !Integer.valueOf(immutableTotal).equals(request.getTotalScore())) {
                 throw new JudgeResultConflictException(

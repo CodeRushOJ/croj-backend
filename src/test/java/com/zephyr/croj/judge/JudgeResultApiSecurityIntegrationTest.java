@@ -99,13 +99,15 @@ class JudgeResultApiSecurityIntegrationTest {
 
     @Test
     void invalidMetricsAreRejectedBeforeTheServiceLayer() throws Exception {
-        String invalid = VALID_BODY.replace("\"timeUsedMillis\":12", "\"timeUsedMillis\":-1");
-
-        mvc.perform(post(ENDPOINT)
-                        .header(JudgeServiceTokenFilter.TOKEN_HEADER, TOKEN)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(invalid))
-                .andExpect(status().isBadRequest());
+        for (int invalidTime : new int[] {-1, 172_800_001}) {
+            String invalid = VALID_BODY.replace(
+                    "\"timeUsedMillis\":12", "\"timeUsedMillis\":" + invalidTime);
+            mvc.perform(post(ENDPOINT)
+                            .header(JudgeServiceTokenFilter.TOKEN_HEADER, TOKEN)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(invalid))
+                    .andExpect(status().isBadRequest());
+        }
 
         verifyNoInteractions(results);
     }

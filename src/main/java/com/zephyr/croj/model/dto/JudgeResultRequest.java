@@ -22,7 +22,7 @@ public class JudgeResultRequest {
     private String status;
     @NotNull
     private Integer exitCode;
-    @NotNull @Min(0) @Max(86_400_000)
+    @NotNull @Min(0) @Max(172_800_000)
     private Integer timeUsedMillis;
     @NotNull @Min(0) @Max(2_147_483_647L)
     private Integer memoryUsedKb;

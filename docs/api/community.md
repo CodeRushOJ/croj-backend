@@ -15,7 +15,7 @@
 
 ## 鉴权与内容策略
 
-- 所有 GET 接口可匿名读取，只返回 `PUBLISHED` 内容和公开题目的题解。
+- 所有 GET 接口可匿名读取，只返回 `PUBLISHED` 内容、公开资源的讨论和公开题目的题解。
 - POST、DELETE 接口需要 `Authorization: Bearer <JWT>`。
 - `authorId` 只从 JWT 获取，请求体不能指定作者。
 - 作者可删除自己的帖子、评论和题解；管理员、超级管理员也可删除。
@@ -28,7 +28,7 @@
 | 方法 | 路径 | 鉴权 | 说明 |
 | --- | --- | --- | --- |
 | GET | `/api/v1/forum/categories` | 否 | 分类列表 |
-| GET | `/api/v1/forum/posts?categoryId=&current=1&size=20` | 否 | 帖子流，置顶优先 |
+| GET | `/api/v1/forum/posts?resourceType=GENERAL&resourceId=&categoryId=&current=1&size=20` | 否 | 指定资源的帖子流，置顶优先 |
 | POST | `/api/v1/forum/posts` | 是 | 发布帖子 |
 | GET | `/api/v1/forum/posts/{postId}` | 否 | 帖子详情 |
 | DELETE | `/api/v1/forum/posts/{postId}` | 是 | 作者或管理员软删除 |
@@ -41,10 +41,16 @@
 ```json
 {
   "categoryId": 2,
+  "resourceType": "PROBLEM",
+  "resourceId": 1001,
   "title": "线段树懒标记的边界处理",
   "contentMarkdown": "## 思路\n讨论区间更新时的下推时机。"
 }
 ```
+
+`resourceType` 只能是 `GENERAL`、`PROBLEM` 或 `CONTEST`。`GENERAL` 必须省略
+`resourceId`；`PROBLEM/CONTEST` 必须提供正整数 `resourceId`。为兼容早期客户端，省略
+`resourceType` 等价于 `GENERAL`。题目讨论只允许关联已公开题目；比赛讨论只允许关联已发布且公开的比赛，私有比赛继续使用比赛澄清能力。列表、详情和评论都会重新校验资源可见性，不能通过已知帖子 ID 绕过题目或比赛权限。
 
 发表评论；顶级评论省略 `parentId`，回复时它必须指向同一帖子的已发布评论：
 

@@ -9,6 +9,8 @@ public class ForumPostVO {
     private Long categoryId;
     private Long authorId;
     private String authorName;
+    private String resourceType;
+    private Long resourceId;
     private String title;
     private String contentMarkdown;
     private String contentHtml;

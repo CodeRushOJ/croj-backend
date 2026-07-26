@@ -27,9 +27,8 @@ public class SwaggerConfig {
                         .version("v1.0.0")
                         .description("CodeRush在线评测系统API文档")
                         .contact(new Contact()
-                                .name("HeZephyr")
-                                .email("unique.hzf@gmail.com")
-                                .url("https://github.com/HeZephyr")))
+                                .name("CodeRushOJ")
+                                .url("https://github.com/CodeRushOJ")))
                 .components(new Components()
                         .addSecuritySchemes("Bearer Authentication", createSecurityScheme()));
     }

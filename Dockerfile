@@ -17,7 +17,7 @@ RUN --mount=type=cache,target=/root/.m2 \
 FROM gcr.io/distroless/java17-debian13:nonroot@sha256:81d09cac6ec47f6a13c61a941557f95079213320f3ddbf9d353de9317669aab5 AS runtime
 
 ARG VCS_REF=unknown
-ARG VERSION=0.0.1-SNAPSHOT
+ARG VERSION=v1.0.4
 ARG BUILD_DATE=unknown
 
 LABEL org.opencontainers.image.title="CodeRushOJ Backend" \

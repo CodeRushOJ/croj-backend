@@ -9,6 +9,7 @@ on:
       - pom.xml
       - .mvn/**
       - mvnw
+      - scripts/project-version.sh
       - src/**
       - tests/container/**
       - tests/integration/**
@@ -80,7 +81,7 @@ jobs:
 
       - name: Validate shell and static container contracts
         run: |
-          shellcheck tests/container/*.sh tests/integration/*.sh
+          shellcheck scripts/project-version.sh tests/container/*.sh tests/integration/*.sh
           tests/container/production-image-contract.sh
 
       - name: Verify pinned base indexes support amd64 and arm64
@@ -101,8 +102,9 @@ jobs:
       - name: Derive immutable image metadata
         id: metadata
         run: |
+          POM_VERSION="$(scripts/project-version.sh)"
           printf 'created=%s\n' "$(git show -s --format=%cI HEAD)" >> "$GITHUB_OUTPUT"
-          printf 'version=%s\n' "${GITHUB_REF_NAME:-0.0.1-SNAPSHOT}" >> "$GITHUB_OUTPUT"
+          printf 'version=v%s\n' "$POM_VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Build inspection image
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
@@ -204,7 +206,9 @@ jobs:
 
       - name: Verify annotated SemVer release tag
         run: |
+          POM_VERSION="$(scripts/project-version.sh)"
           [[ "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          test "$GITHUB_REF_NAME" = "v$POM_VERSION"
           git rev-parse "$GITHUB_REF_NAME^{tag}" >/dev/null
           test "$(git rev-parse "$GITHUB_REF_NAME^{commit}")" = "$GITHUB_SHA"
           git fetch --no-tags origin main

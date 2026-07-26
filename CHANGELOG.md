@@ -15,6 +15,7 @@
 
 ### Changed
 
+- Maven artifact、可执行 JAR、SBOM 与 OCI label 统一使用 `1.0.4`/`v1.0.4`；发布工作流要求 annotated tag 与 POM 版本精确一致，阻止供应链版本漂移。
 - 本版本不包含数据库迁移、接口路径或业务语义变更；部署方只需更新后端镜像 digest。
 
 ## [1.0.3] - 2026-07-26

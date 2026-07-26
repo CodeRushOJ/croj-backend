@@ -10,7 +10,7 @@
     </parent>
     <groupId>com.zephyr</groupId>
     <artifactId>croj</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
+    <version>1.0.4</version>
     <name>croj</name>
     <description>CodeRush Online Judge System</description>
 

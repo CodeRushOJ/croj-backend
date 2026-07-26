@@ -7,6 +7,8 @@ on:
       - .dockerignore
       - .trivyignore.yaml
       - pom.xml
+      - README.md
+      - CHANGELOG.md
       - .mvn/**
       - mvnw
       - scripts/project-version.sh
